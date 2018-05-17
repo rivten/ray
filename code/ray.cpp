@@ -47,7 +47,7 @@ DrawBackbuffer(render_state* RenderState, u32* Backbuffer)
 		for(u32 X = 0; X < GlobalWindowWidth; ++X)
 		{
 			u32* Pixel = Backbuffer + X + Y * GlobalWindowWidth;
-#if 0
+#if 1
 			u8 R = (u32)(255.0f * (float(X) / float(GlobalWindowWidth))) & 0xFF;
 			u8 G = (u32)(255.0f * (float(Y) / float(GlobalWindowHeight))) & 0xFF;
 			u8 B = 40;
