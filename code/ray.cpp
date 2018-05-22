@@ -17,7 +17,7 @@ global_variable u32 GlobalWindowWidth = 1024;
 global_variable u32 GlobalWindowHeight = 1024;
 global_variable bool GlobalRunning = true;
 global_variable bool GlobalComputed = false;
-global_variable u32 GlobalAACount = 10;
+global_variable u32 GlobalAACount = 20;
 
 internal u32
 RGBToPixel(u8 R, u8 G, u8 B)

@@ -24,7 +24,7 @@ CommonLinkerFlags="-l SDL2"
 mkdir -p "$CODE_PATH/../build"
 pushd "$CODE_PATH/../build"
 
-$CXX $CommonFlags ../code/ray.cpp $CommonLinkerFlags -o ray-x86_64
+$CXX $CommonFlags -O3 ../code/ray.cpp $CommonLinkerFlags -o ray-x86_64
 
 popd
 
