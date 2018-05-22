@@ -14,6 +14,7 @@
 global_variable u32 GlobalWindowWidth = 512;
 global_variable u32 GlobalWindowHeight = 512;
 global_variable bool GlobalRunning = true;
+global_variable bool GlobalComputed = false;
 
 internal u32
 RGBToPixel(u8 R, u8 G, u8 B)
@@ -25,6 +26,15 @@ RGBToPixel(u8 R, u8 G, u8 B)
 			     (B << 0);
 
 	return(Result);
+}
+
+internal u32
+RGBToPixel(v3 Color)
+{
+	u8 R = (u8)(u32(255.99f * Color.r) & 0xFF);
+	u8 G = (u8)(u32(255.99f * Color.g) & 0xFF);
+	u8 B = (u8)(u32(255.99f * Color.b) & 0xFF);
+	return(RGBToPixel(R, G, B));
 }
 
 struct camera
@@ -40,6 +50,13 @@ struct sphere
 	v3 P;
 };
 
+struct persistent_render_value
+{
+	float ScreenWidth;
+	float ScreenHeight;
+	v3 CameraYAxis;
+};
+
 struct render_state
 {
 	u32 SphereCount;
@@ -49,6 +66,8 @@ struct render_state
 	float FocalLength;
 	float FoV;
 	float AspectRatio;
+
+	persistent_render_value PersistentRenderValue;
 };
 
 struct ray
@@ -57,22 +76,34 @@ struct ray
 	v3 Dir;
 };
 
+inline float
+GetDeltaHitSphere(sphere* S, ray* R)
+{
+	float A = LengthSqr(R->Dir);
+	float B = 2.0f * Dot(R->Start - S->P, R->Dir);
+	float C = LengthSqr(R->Start - S->P) - S->Radius * S->Radius;
+	// NOTE(hugo): The hit equation then becomes
+	// A * t * t + B * t + C = 0
+	float Result = B * B - 4.0f * A * C;
+	return(Result);
+}
+
 internal void
 DrawBackbuffer(render_state* RenderState, u32* Backbuffer)
 {
+	float ScreenWidth = RenderState->PersistentRenderValue.ScreenWidth;
+	float ScreenHeight = RenderState->PersistentRenderValue.ScreenHeight;
+	v3 CameraYAxis = RenderState->PersistentRenderValue.CameraYAxis;
+
 	for(u32 Y = 0; Y < GlobalWindowHeight; ++Y)
 	{
 		for(u32 X = 0; X < GlobalWindowWidth; ++X)
 		{
 			u32* Pixel = Backbuffer + X + Y * GlobalWindowWidth;
 
-			// TODO(hugo): Most of this can be done outside the loop
 			ray Ray = {};
 			Ray.Start = RenderState->Camera.P;
-			v2 PixelRelativeCoordInScreen = V2((float(X) / float(GlobalWindowWidth)) - 0.5f, (float(Y) / float(GlobalWindowHeight)) - 0.5f);
-			float ScreenWidth = 2.0f * RenderState->FocalLength * Tan(0.5f * RenderState->FoV);
-			float ScreenHeight = ScreenWidth * RenderState->AspectRatio;
-			v3 CameraYAxis = Cross(RenderState->Camera.ZAxis, RenderState->Camera.XAxis);
+			v2 PixelRelativeCoordInScreen = V2((float(X) / float(GlobalWindowWidth)) - 0.5f, 0.5f - (float(Y) / float(GlobalWindowHeight)));
 			v3 PixelWorldSpace = RenderState->Camera.P - RenderState->FocalLength * RenderState->Camera.ZAxis + 
 				PixelRelativeCoordInScreen.x * ScreenWidth * RenderState->Camera.XAxis + PixelRelativeCoordInScreen.y * ScreenHeight * CameraYAxis;
 			// TODO(hugo): Do we need to have a normalized direction ? Maybe not...
@@ -83,11 +114,24 @@ DrawBackbuffer(render_state* RenderState, u32* Backbuffer)
 			u8 G = (u32)(255.0f * (float(Y) / float(GlobalWindowHeight))) & 0xFF;
 			u8 B = 40;
 #else
-			u8 R = 0;
-			u8 G = 0;
-			u8 B = (u32)(255.0f * (0.5f * (- Ray.Dir.y) + 0.5f)) & 0xFF;
+			sphere* S = RenderState->Spheres + 0;
+			float Delta = GetDeltaHitSphere(S, &Ray);
+			float t = 0.5f * (1.0f + Ray.Dir.y);
+			v3 Color = Lerp(V3(1.0f, 1.0f, 1.0f), t, V3(0.5f, 0.7f, 1.0f));
+
+			if(Delta < 0)
+			{
+			}
+			else if(Delta == 0.0f)
+			{
+				Color = V3(1.0f, 0.0f, 0.0f);
+			}
+			else // Delta > 0
+			{
+				Color =  V3(1.0f, 0.0f, 0.0f);
+			}
 #endif
-			*Pixel = RGBToPixel(R, G, B);
+			*Pixel = RGBToPixel(Color);
 		}
 	}
 }
@@ -120,6 +164,14 @@ int main(int ArgumentCount, char** Arguments)
 	RenderState.FocalLength = 2.0f;
 	RenderState.AspectRatio = float(GlobalWindowHeight) / float(GlobalWindowWidth);
 
+	RenderState.PersistentRenderValue.ScreenWidth = 2.0f * RenderState.FocalLength * Tan(0.5f * RenderState.FoV);
+	RenderState.PersistentRenderValue.ScreenHeight = RenderState.PersistentRenderValue.ScreenWidth * RenderState.AspectRatio;
+	RenderState.PersistentRenderValue.CameraYAxis = Cross(RenderState.Camera.ZAxis, RenderState.Camera.XAxis);
+
+	RenderState.Spheres[0].Radius = 2.0f;
+	RenderState.Spheres[0].P = V3(0.0f, 0.0f, -5.0f);
+	RenderState.SphereCount = 1;
+
 	while(GlobalRunning)
 	{
 		// NOTE(hugo): Input
@@ -140,10 +192,15 @@ int main(int ArgumentCount, char** Arguments)
 		}
 		// }
 
-
-		DrawBackbuffer(&RenderState, Backbuffer);
-		memcpy(Screen->pixels, Backbuffer, sizeof(u32) * GlobalWindowWidth * GlobalWindowHeight);
-		SDL_UpdateWindowSurface(Window);
+		if(!GlobalComputed)
+		{
+			DrawBackbuffer(&RenderState, Backbuffer);
+			memcpy(Screen->pixels, Backbuffer, sizeof(u32) * GlobalWindowWidth * GlobalWindowHeight);
+			//u32* FirstPixel = (u32*)Screen->pixels;
+			//*FirstPixel = RGBToPixel(V3(1.0f, 0.0f, 0.0f));
+			SDL_UpdateWindowSurface(Window);
+			GlobalComputed = true;
+		}
 	}
 
 	SDL_DestroyWindow(Window);

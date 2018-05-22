@@ -644,6 +644,16 @@ float GetAngle(v3 A, v3 B, v3 RefAxis)
 	return(Result);
 }
 
+inline v3
+Lerp(v3 A, float t, v3 B)
+{
+	float x = Lerp(A.x, t, B.x);
+	float y = Lerp(A.y, t, B.y);
+	float z = Lerp(A.z, t, B.z);
+	return(V3(x, y, z));
+}
+
+
 /* ------------------------------
  *           v4 
  * ------------------------------ */
