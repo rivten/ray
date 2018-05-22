@@ -11,8 +11,8 @@
 
 #define SDL_CHECK(Op) {s32 Result = (Op); Assert(Result == 0);}
 
-global_variable u32 GlobalWindowWidth = 512;
-global_variable u32 GlobalWindowHeight = 512;
+global_variable u32 GlobalWindowWidth = 1024;
+global_variable u32 GlobalWindowHeight = 1024;
 global_variable bool GlobalRunning = true;
 global_variable bool GlobalComputed = false;
 
@@ -109,14 +109,16 @@ DrawBackbuffer(render_state* RenderState, u32* Backbuffer)
 			// TODO(hugo): Do we need to have a normalized direction ? Maybe not...
 			Ray.Dir = Normalized(PixelWorldSpace - Ray.Start);
 
-#if 0
-			u8 R = (u32)(255.0f * (float(X) / float(GlobalWindowWidth))) & 0xFF;
-			u8 G = (u32)(255.0f * (float(Y) / float(GlobalWindowHeight))) & 0xFF;
-			u8 B = 40;
-#else
 			sphere* S = RenderState->Spheres + 0;
-			float Delta = GetDeltaHitSphere(S, &Ray);
+			float A = LengthSqr(Ray.Dir);
+			float B = 2.0f * Dot(Ray.Start - S->P, Ray.Dir);
+			float C = LengthSqr(Ray.Start - S->P) - S->Radius * S->Radius;
+			// NOTE(hugo): The hit equation then becomes
+			// A * t * t + B * t + C = 0
+			float Delta = B * B - 4.0f * A * C;
 			float t = 0.5f * (1.0f + Ray.Dir.y);
+
+			// NOTE(hugo): Background color
 			v3 Color = Lerp(V3(1.0f, 1.0f, 1.0f), t, V3(0.5f, 0.7f, 1.0f));
 
 			if(Delta < 0)
@@ -124,13 +126,37 @@ DrawBackbuffer(render_state* RenderState, u32* Backbuffer)
 			}
 			else if(Delta == 0.0f)
 			{
-				Color = V3(1.0f, 0.0f, 0.0f);
+				float t0 = - B / (2.0f * A);
+				if(t0 > 0)
+				{
+					// NOTE(hugo): We hit something forward
+					v3 HitPoint = Ray.Start + t0 * Ray.Dir;
+					// TODO(hugo): @Optim : we know that the norm is radius ?
+					v3 HitNormal = Normalized(HitPoint - S->P); 
+					Color = 0.5f * (V3(1.0f, 1.0f, 1.0f) + HitNormal);
+				}
 			}
 			else // Delta > 0
 			{
 				Color =  V3(1.0f, 0.0f, 0.0f);
+				// NOTE(hugo): Since A > 0 (it's a norm), we know
+				// that t1 < t2
+				float t1 = (- B - SquareRoot(Delta)) / (2.0f * A);
+				float t2 = (- B + SquareRoot(Delta)) / (2.0f * A);
+
+				if(t1 > 0)
+				{
+					v3 HitPoint = Ray.Start + t1 * Ray.Dir;
+					// TODO(hugo): @Optim : we know that the norm is radius ?
+					v3 HitNormal = Normalized(HitPoint - S->P); 
+					Color = 0.5f * (V3(1.0f, 1.0f, 1.0f) + HitNormal);
+				}
+				else if(t2 > 0)
+				{
+					// NOTE(hugo): We are inside the sphere ??
+				}
 			}
-#endif
+
 			*Pixel = RGBToPixel(Color);
 		}
 	}
@@ -169,7 +195,7 @@ int main(int ArgumentCount, char** Arguments)
 	RenderState.PersistentRenderValue.CameraYAxis = Cross(RenderState.Camera.ZAxis, RenderState.Camera.XAxis);
 
 	RenderState.Spheres[0].Radius = 2.0f;
-	RenderState.Spheres[0].P = V3(0.0f, 0.0f, -5.0f);
+	RenderState.Spheres[0].P = V3(0.0f, 0.0f, 5.0f);
 	RenderState.SphereCount = 1;
 
 	while(GlobalRunning)
