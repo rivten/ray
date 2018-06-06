@@ -1519,3 +1519,29 @@ v2 RectSize(rect2 Rect)
 
 	return(Result);
 }
+
+/* ------------------------------
+ *           rect3
+ * ------------------------------ */
+
+struct rect3
+{
+	v3 Min;
+	v3 Max;
+};
+
+rect3 RectFromMinSize(v3 Min, v3 Size)
+{
+	rect3 Result = {};
+	Result.Min = Min;
+	Result.Max = Min + Size;
+	
+	return(Result);
+}
+
+v3 RectSize(rect3 Rect)
+{
+	v3 Result = Rect.Max - Rect.Min;
+
+	return(Result);
+}

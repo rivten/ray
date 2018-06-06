@@ -10,6 +10,8 @@
 #include "rivten_math.h"
 #include "random.h"
 
+#include "kdtree.cpp"
+
 #define USE_ENTROPY 0
 
 #if !USE_ENTROPY
@@ -18,7 +20,7 @@
 internal float
 RandomUnilateral(void)
 {
-	float Result = (float)(rand()) / (float)(RAND_MAX + 1);
+	float Result = (float)(rand()) / (float)(RAND_MAX);
 	return(Result);
 }
 #endif
@@ -94,6 +96,8 @@ struct render_state
 {
 	u32 SphereCount;
 	sphere Spheres[256];
+
+	kdtree Scene;
 
 	u32 MaterialCount;
 	material Materials[256];
@@ -174,6 +178,12 @@ GetRandomPointInUnitSphere(random_series* Entropy)
 		Result = 2.0f * V3(x, y, z) - V3(1.0f, 1.0f, 1.0f);
 	} while(LengthSqr(Result) >= 1.0f);
 	return(Result);
+}
+
+internal bool
+RayHitBoundingBox(rect3 BoundingBox, ray Ray)
+{
+	return(true);
 }
 
 internal void
@@ -335,6 +345,8 @@ int main(int ArgumentCount, char** Arguments)
 	RenderState.PersistentRenderValue.CameraYAxis = Cross(RenderState.Camera.ZAxis, RenderState.Camera.XAxis);
 
 	RenderState.Entropy = RandomSeed(1234);
+
+	RenderState.Scene = LoadKDTreeFromFile("../data/teapot_with_normal.obj");
 
 	PushMaterial(&RenderState, {V3(0.8f, 0.2f, 0.1f), 0.5f, 0.9f});
 	PushMaterial(&RenderState, {V3(0.2f, 1.0f, 0.5f), 0.5f, 0.5f});
