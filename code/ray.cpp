@@ -176,6 +176,60 @@ GetRandomPointInUnitSphere(random_series* Entropy)
 	return(Result);
 }
 
+internal void
+RaySphereIntersection(sphere* S, ray Ray, hit_record* ClosestHitRecord)
+{
+	float A = LengthSqr(Ray.Dir);
+	float B = 2.0f * Dot(Ray.Start - S->P, Ray.Dir);
+	float C = LengthSqr(Ray.Start - S->P) - S->Radius * S->Radius;
+	// NOTE(hugo): The hit equation then becomes
+	// A * t * t + B * t + C = 0
+	float Delta = B * B - 4.0f * A * C;
+
+	if(Delta < 0)
+	{
+	}
+	else if(Delta == 0.0f)
+	{
+		float t0 = - B / (2.0f * A);
+		if(t0 > 0)
+		{
+			if(t0 < ClosestHitRecord->t)
+			{
+				// NOTE(hugo): We hit something forward
+				ClosestHitRecord->t = t0;
+				ClosestHitRecord->P = Ray.Start + t0 * Ray.Dir;
+				// TODO(hugo): @Optim : we know that the norm is radius ?
+				ClosestHitRecord->N = Normalized(ClosestHitRecord->P - S->P);
+				ClosestHitRecord->MaterialIndex = S->MaterialIndex;
+			}
+		}
+	}
+	else // Delta > 0
+	{
+		// NOTE(hugo): Since A > 0 (it's a norm), we know
+		// that t1 < t2
+		float t1 = (- B - SquareRoot(Delta)) / (2.0f * A);
+		float t2 = (- B + SquareRoot(Delta)) / (2.0f * A);
+
+		if(t1 > 0)
+		{
+			if(t1 < ClosestHitRecord->t)
+			{
+				ClosestHitRecord->t = t1;
+				ClosestHitRecord->P = Ray.Start + t1 * Ray.Dir;
+				// TODO(hugo): @Optim : we know that the norm is radius ?
+				ClosestHitRecord->N = Normalized(ClosestHitRecord->P - S->P);
+				ClosestHitRecord->MaterialIndex = S->MaterialIndex;
+			}
+		}
+		else if(t2 > 0)
+		{
+			// NOTE(hugo): We are inside the sphere ??
+		}
+	}
+}
+
 internal v3
 ShootRay(render_state* RenderState, ray Ray)
 {
@@ -185,56 +239,7 @@ ShootRay(render_state* RenderState, ray Ray)
 	for(u32 SphereIndex = 0; SphereIndex < RenderState->SphereCount; ++SphereIndex)
 	{
 		sphere* S = RenderState->Spheres + SphereIndex;
-		float A = LengthSqr(Ray.Dir);
-		float B = 2.0f * Dot(Ray.Start - S->P, Ray.Dir);
-		float C = LengthSqr(Ray.Start - S->P) - S->Radius * S->Radius;
-		// NOTE(hugo): The hit equation then becomes
-		// A * t * t + B * t + C = 0
-		float Delta = B * B - 4.0f * A * C;
-
-		if(Delta < 0)
-		{
-		}
-		else if(Delta == 0.0f)
-		{
-			float t0 = - B / (2.0f * A);
-			if(t0 > 0)
-			{
-				if(t0 < ClosestHitRecord.t)
-				{
-					// NOTE(hugo): We hit something forward
-					ClosestHitRecord.t = t0;
-					ClosestHitRecord.P = Ray.Start + t0 * Ray.Dir;
-					// TODO(hugo): @Optim : we know that the norm is radius ?
-					ClosestHitRecord.N = Normalized(ClosestHitRecord.P - S->P);
-					ClosestHitRecord.MaterialIndex = S->MaterialIndex;
-				}
-			}
-		}
-		else // Delta > 0
-		{
-			// NOTE(hugo): Since A > 0 (it's a norm), we know
-			// that t1 < t2
-			float t1 = (- B - SquareRoot(Delta)) / (2.0f * A);
-			float t2 = (- B + SquareRoot(Delta)) / (2.0f * A);
-
-			if(t1 > 0)
-			{
-				if(t1 < ClosestHitRecord.t)
-				{
-					ClosestHitRecord.t = t1;
-					ClosestHitRecord.P = Ray.Start + t1 * Ray.Dir;
-					// TODO(hugo): @Optim : we know that the norm is radius ?
-					ClosestHitRecord.N = Normalized(ClosestHitRecord.P - S->P);
-					ClosestHitRecord.MaterialIndex = S->MaterialIndex;
-				}
-			}
-			else if(t2 > 0)
-			{
-				// NOTE(hugo): We are inside the sphere ??
-			}
-		}
-
+		RaySphereIntersection(S, Ray, &ClosestHitRecord);
 	}
 	if(ClosestHitRecord.t < MAX_FLOAT32)
 	{
@@ -245,6 +250,8 @@ ShootRay(render_state* RenderState, ray Ray)
 		material* M = RenderState->Materials + ClosestHitRecord.MaterialIndex;
 
 		NextRay.Dir = Normalized(Lerp(TargetSpecular, M->Scatter, TargetDiffuse));
+		// TODO(hugo): Russian roulette parameter to avoid
+		// too many computations ?
 		return(M->Attenuation * Hadamard(M->Albedo, ShootRay(RenderState, NextRay)));
 	}
 	else
@@ -332,13 +339,15 @@ int main(int ArgumentCount, char** Arguments)
 	PushMaterial(&RenderState, {V3(0.8f, 0.2f, 0.1f), 0.5f, 0.9f});
 	PushMaterial(&RenderState, {V3(0.2f, 1.0f, 0.5f), 0.5f, 0.5f});
 	PushMaterial(&RenderState, {V3(0.0f, 0.7f, 1.0f), 0.8f, 0.1f});
+	PushMaterial(&RenderState, {V3(0.0f, 0.7f, 1.0f), 0.4f, 0.8f});
+	PushMaterial(&RenderState, {V3(0.8f, 0.6f, 0.2f), 0.6f, 0.7f});
 
 	PushSphere(&RenderState, {1.0f, V3(-1.0f, 0.5f, 5.0f), 0});
 	PushSphere(&RenderState, {2.0f, V3(0.0f, 0.0f, 0.0f), 1});
-	PushSphere(&RenderState, {150.0f, V3(0.0f, -152.0f, -10.0f), 2});
-	PushSphere(&RenderState, {0.5f, V3(1.5f, -2.2f, 3.0f), 0});
+	PushSphere(&RenderState, {150.0f, V3(0.0f, -152.0f, -10.0f), 3});
+	PushSphere(&RenderState, {0.5f, V3(1.5f, -2.2f, 3.0f), 2});
 	PushSphere(&RenderState, {3.0f, V3(-4.0f, 1.0f, 0.0f), 1});
-	PushSphere(&RenderState, {2.5f, V3(4.0f, 1.0f, 0.0f), 2});
+	PushSphere(&RenderState, {2.5f, V3(4.0f, 1.0f, 0.0f), 4});
 
 	u32 CurrentAAIndex = 0;
 
