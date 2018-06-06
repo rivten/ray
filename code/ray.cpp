@@ -286,6 +286,12 @@ RayHitBoundingBox(ray Ray, rect3 BoundingBox)
 }
 
 internal void
+RayTriangleIntersection(ray Ray, triangle T, vertex* Vertices, hit_record* ClosestHitRecord)
+{
+	Assert(!"ToImplement");
+}
+
+internal void
 RaySphereIntersection(sphere* S, ray Ray, hit_record* ClosestHitRecord)
 {
 	float A = LengthSqr(Ray.Dir);
@@ -355,7 +361,12 @@ ShootRay(render_state* RenderState, ray Ray)
 	rect3 SceneBoundingBox = RenderState->Scene.BoundingBox;
 	if(RayHitBoundingBox(Ray, SceneBoundingBox))
 	{
-		return(V3(1.0f, 0.0f, 0.0f));
+		mesh Mesh = RenderState->Scene.Mesh;
+		for(u32 TriangleIndex = 0; TriangleIndex < Mesh.TriangleCount; ++TriangleIndex)
+		{
+			triangle T = Mesh.Triangles[TriangleIndex];
+			RayTriangleIntersection(Ray, T, Mesh.Vertices, &ClosestHitRecord);
+		}
 	}
 
 	if(ClosestHitRecord.t < MAX_FLOAT32)
