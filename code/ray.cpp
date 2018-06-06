@@ -181,9 +181,108 @@ GetRandomPointInUnitSphere(random_series* Entropy)
 }
 
 internal bool
-RayHitBoundingBox(rect3 BoundingBox, ray Ray)
+RayHitBoundingBox(ray Ray, rect3 BoundingBox)
 {
-	return(true);
+	// TODO(hugo): Better perf for this !
+	bool Hit = false;
+
+	// NOTE(hugo): Checking BACK FACE of AABB
+	{
+		// NOTE(hugo): Equation of normal is z = BoundingBox.Min.z
+		if(Ray.Dir.z != 0.0f)
+		{
+			float t = (BoundingBox.Min.z - Ray.Start.z) / Ray.Dir.z;
+			v3 HitPoint = Ray.Start + t * Ray.Dir;
+			Hit = Hit || (t >= 0.0f && HitPoint.x >= BoundingBox.Min.x && HitPoint.x < BoundingBox.Max.x &&
+					HitPoint.y >= BoundingBox.Min.y && HitPoint.y < BoundingBox.Max.y);
+		}
+		else
+		{
+			//Assert(Ray.Start.z != BoundingBox.Min.z);
+		}
+	}
+
+	// NOTE(hugo): Checking FRONT FACE of AABB
+	{
+		// NOTE(hugo): Equation of normal is z = BoundingBox.Max.z
+		if(Ray.Dir.z != 0.0f)
+		{
+			float t = (BoundingBox.Max.z - Ray.Start.z) / Ray.Dir.z;
+			v3 HitPoint = Ray.Start + t * Ray.Dir;
+			Hit = Hit || (t >= 0.0f && HitPoint.x >= BoundingBox.Min.x && HitPoint.x < BoundingBox.Max.x &&
+					HitPoint.y >= BoundingBox.Min.y && HitPoint.y < BoundingBox.Max.y);
+		}
+		else
+		{
+			//Assert(Ray.Start.z != BoundingBox.Max.z);
+		}
+	}
+
+	// NOTE(hugo): Checking LEFT FACE of AABB
+	{
+		// NOTE(hugo): Equation of normal is x = BoundingBox.Min.x
+		if(Ray.Dir.x != 0.0f)
+		{
+			float t = (BoundingBox.Min.x - Ray.Start.x) / Ray.Dir.x;
+			v3 HitPoint = Ray.Start + t * Ray.Dir;
+			Hit = Hit || (t >= 0.0f && HitPoint.y >= BoundingBox.Min.y && HitPoint.y < BoundingBox.Max.y &&
+					HitPoint.z >= BoundingBox.Min.z && HitPoint.z < BoundingBox.Max.z);
+		}
+		else
+		{
+			//Assert(Ray.Start.x != BoundingBox.Min.x);
+		}
+	}
+
+	// NOTE(hugo): Checking RIGHT FACE of AABB
+	{
+		// NOTE(hugo): Equation of normal is x = BoundingBox.Max.x
+		if(Ray.Dir.x != 0.0f)
+		{
+			float t = (BoundingBox.Max.x - Ray.Start.x) / Ray.Dir.x;
+			v3 HitPoint = Ray.Start + t * Ray.Dir;
+			Hit = Hit || (t >= 0.0f && HitPoint.y >= BoundingBox.Min.y && HitPoint.y < BoundingBox.Max.y &&
+					HitPoint.z >= BoundingBox.Min.z && HitPoint.z < BoundingBox.Max.z);
+		}
+		else
+		{
+			//Assert(Ray.Start.x != BoundingBox.Max.x);
+		}
+	}
+
+	// NOTE(hugo): Checking BOTTOM FACE of AABB
+	{
+		// NOTE(hugo): Equation of normal is y = BoundingBox.Min.y
+		if(Ray.Dir.y != 0.0f)
+		{
+			float t = (BoundingBox.Min.y - Ray.Start.y) / Ray.Dir.y;
+			v3 HitPoint = Ray.Start + t * Ray.Dir;
+			Hit = Hit || (t >= 0.0f && HitPoint.x >= BoundingBox.Min.x && HitPoint.x < BoundingBox.Max.x &&
+					HitPoint.z >= BoundingBox.Min.z && HitPoint.z < BoundingBox.Max.z);
+		}
+		else
+		{
+			//Assert(Ray.Start.y != BoundingBox.Min.y);
+		}
+	}
+
+	// NOTE(hugo): Checking TOP FACE of AABB
+	{
+		// NOTE(hugo): Equation of normal is y = BoundingBox.Max.y
+		if(Ray.Dir.y != 0.0f)
+		{
+			float t = (BoundingBox.Max.y - Ray.Start.y) / Ray.Dir.y;
+			v3 HitPoint = Ray.Start + t * Ray.Dir;
+			Hit = Hit || (t >= 0.0f && HitPoint.x >= BoundingBox.Min.x && HitPoint.x < BoundingBox.Max.x &&
+					HitPoint.z >= BoundingBox.Min.z && HitPoint.z < BoundingBox.Max.z);
+		}
+		else
+		{
+			//Assert(Ray.Start.y != BoundingBox.Max.y);
+		}
+	}
+
+	return(Hit);
 }
 
 internal void
@@ -246,11 +345,19 @@ ShootRay(render_state* RenderState, ray Ray)
 	hit_record ClosestHitRecord = {};
 	ClosestHitRecord.t = MAX_FLOAT32;
 
+#if 0
 	for(u32 SphereIndex = 0; SphereIndex < RenderState->SphereCount; ++SphereIndex)
 	{
 		sphere* S = RenderState->Spheres + SphereIndex;
 		RaySphereIntersection(S, Ray, &ClosestHitRecord);
 	}
+#endif
+	rect3 SceneBoundingBox = RenderState->Scene.BoundingBox;
+	if(RayHitBoundingBox(Ray, SceneBoundingBox))
+	{
+		return(V3(1.0f, 0.0f, 0.0f));
+	}
+
 	if(ClosestHitRecord.t < MAX_FLOAT32)
 	{
 		ray NextRay = {};
