@@ -78,7 +78,7 @@ LoadKDTreeFromFile(char* Filename)
 	{
 		tinyobj::mesh_t Mesh = Shapes[ShapeIndex].mesh;
 
-		u32 MaxTriangleCount = Mesh.indices.size() / 3;
+		u32 MaxTriangleCount = (u32)(Mesh.indices.size()) / 3;
 
 		Result.Mesh.TriangleCount = 0;
 		Result.Mesh.Triangles = AllocateArray(triangle, MaxTriangleCount);

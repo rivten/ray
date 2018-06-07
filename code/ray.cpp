@@ -28,8 +28,13 @@ RandomUnilateral(void)
 #define SDL_CHECK(Op) {s32 Result = (Op); Assert(Result == 0);}
 #define MAX_FLOAT32 FLT_MAX
 
+#if 0
 global_variable u32 GlobalWindowWidth = 1024;
 global_variable u32 GlobalWindowHeight = 1024;
+#else
+global_variable u32 GlobalWindowWidth = 256;
+global_variable u32 GlobalWindowHeight = 256;
+#endif
 global_variable bool GlobalRunning = true;
 global_variable bool GlobalComputed = false;
 global_variable u32 GlobalAACount = 20000;
@@ -288,7 +293,59 @@ RayHitBoundingBox(ray Ray, rect3 BoundingBox)
 internal void
 RayTriangleIntersection(ray Ray, triangle T, vertex* Vertices, hit_record* ClosestHitRecord)
 {
-	Assert(!"ToImplement");
+	v3 v0 = Vertices[T.Indices[0]].P;
+	v3 v1 = Vertices[T.Indices[1]].P;
+	v3 v2 = Vertices[T.Indices[2]].P;
+	v3 e1 = v1 - v0;
+	v3 e2 = v2 - v0;
+	v3 TriangleNormal = Normalized(Cross(e1, e2));
+
+	v3 q = Cross(Ray.Dir, e2);
+	float a = Dot(q, e1);
+
+	// NOTE(hugo): Is the triangle backface or parallel ?
+	if(Dot(TriangleNormal, Ray.Dir) >= 0 || a == 0.0f)
+	{
+		return;
+	}
+
+	v3 s = (Ray.Start - v0) / a;
+	v3 r = Cross(s, e1);
+
+	// NOTE(hugo): Compute barycentric coordinates
+	v3 BarycentricCoords = {};
+	BarycentricCoords.x = Dot(q, s);
+	BarycentricCoords.y = Dot(r, Ray.Dir);
+	BarycentricCoords.z = 1.0f - BarycentricCoords.x - BarycentricCoords.y;
+
+	// NOTE(hugo): Is the hit inside the triangle ?
+	if(BarycentricCoords.x < 0.0f ||
+			BarycentricCoords.y < 0.0f ||
+			BarycentricCoords.z < 0.0f)
+	{
+		return;
+	}
+
+	float t = Dot(e2, r);
+	if(t < 0.0f)
+	{
+		return;
+	}
+
+	// NOTE(hugo): We hit !
+	if(t < ClosestHitRecord->t)
+	{
+		ClosestHitRecord->t = t;
+		ClosestHitRecord->P = Ray.Start + t * Ray.Dir;
+		v3 n0 = Vertices[T.Indices[0]].N;
+		v3 n1 = Vertices[T.Indices[1]].N;
+		v3 n2 = Vertices[T.Indices[2]].N;
+		v3 N = Normalized(BarycentricCoords.x * n0 + BarycentricCoords.y * n1 + BarycentricCoords.z * n2);
+		ClosestHitRecord->N = N;
+
+		// TODO(hugo): Implement material
+		ClosestHitRecord->MaterialIndex = 0;
+	}
 }
 
 internal void
@@ -451,7 +508,8 @@ int main(int ArgumentCount, char** Arguments)
 	v3* Backbuffer = AllocateArray(v3, GlobalWindowWidth * GlobalWindowHeight);
 
 	render_state RenderState = {};
-	RenderState.Camera.P = V3(0.0f, 0.0f, 10.0f);
+	//RenderState.Camera.P = V3(0.0f, 0.0f, 10.0f);
+	RenderState.Camera.P = V3(0.0f, 1.5f, 5.0f);
 	RenderState.Camera.XAxis = V3(1.0f, 0.0f, 0.0f);
 	RenderState.Camera.ZAxis = V3(0.0f, 0.0f, 1.0f);
 	RenderState.FoV = Radians(75.0f);
