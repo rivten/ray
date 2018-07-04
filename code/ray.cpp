@@ -9,8 +9,7 @@
 #include "rivten.h"
 #include "rivten_math.h"
 #include "random.h"
-
-#include "kdtree.cpp"
+#include "kdtree.h"
 
 #define USE_ENTROPY 0
 
@@ -104,6 +103,9 @@ struct render_state
 
 	kdtree Scene;
 
+	u32 VertexCount;
+	vertex* Vertices;
+
 	u32 MaterialCount;
 	material Materials[256];
 
@@ -121,6 +123,14 @@ struct ray
 {
 	v3 Start;
 	v3 Dir;
+};
+
+struct hit_record
+{
+	v3 P;
+	v3 N;
+	float t;
+	u32 MaterialIndex;
 };
 
 inline v3
@@ -156,14 +166,6 @@ GetDeltaHitSphere(sphere* S, ray* R)
 	float Result = B * B - 4.0f * A * C;
 	return(Result);
 }
-
-struct hit_record
-{
-	v3 P;
-	v3 N;
-	float t;
-	u32 MaterialIndex;
-};
 
 internal v3
 GetRandomPointInUnitSphere(random_series* Entropy)
@@ -402,6 +404,8 @@ RaySphereIntersection(sphere* S, ray Ray, hit_record* ClosestHitRecord)
 	}
 }
 
+#include "kdtree.cpp"
+
 internal v3
 ShootRay(render_state* RenderState, ray Ray)
 {
@@ -415,16 +419,7 @@ ShootRay(render_state* RenderState, ray Ray)
 		RaySphereIntersection(S, Ray, &ClosestHitRecord);
 	}
 #endif
-	rect3 SceneBoundingBox = RenderState->Scene.BoundingBox;
-	if(RayHitBoundingBox(Ray, SceneBoundingBox))
-	{
-		mesh Mesh = RenderState->Scene.Mesh;
-		for(u32 TriangleIndex = 0; TriangleIndex < Mesh.TriangleCount; ++TriangleIndex)
-		{
-			triangle T = Mesh.Triangles[TriangleIndex];
-			RayTriangleIntersection(Ray, T, Mesh.Vertices, &ClosestHitRecord);
-		}
-	}
+	RayKdTreeIntersection(Ray, &RenderState->Scene, RenderState, &ClosestHitRecord);
 
 	if(ClosestHitRecord.t < MAX_FLOAT32)
 	{
@@ -522,7 +517,7 @@ int main(int ArgumentCount, char** Arguments)
 
 	RenderState.Entropy = RandomSeed(1234);
 
-	RenderState.Scene = LoadKDTreeFromFile("../data/teapot_with_normal.obj");
+	RenderState.Scene = LoadKDTreeFromFile("../data/teapot_with_normal.obj", &RenderState);
 
 	PushMaterial(&RenderState, {V3(0.8f, 0.2f, 0.1f), 0.5f, 0.9f});
 	PushMaterial(&RenderState, {V3(0.2f, 1.0f, 0.5f), 0.5f, 0.5f});

@@ -5,33 +5,6 @@
 #include "tiny_obj_loader.h"
 #define internal static
 
-struct vertex
-{
-	v3 P;
-	v3 N;
-	// TODO(hugo): add UV ?
-};
-
-struct triangle
-{
-	u32 Indices[3];
-	//u32 MaterialIndex;
-};
-
-struct mesh
-{
-	u32 VertexCount;
-	vertex* Vertices;
-	u32 TriangleCount;
-	triangle* Triangles;
-};
-
-struct kdtree
-{
-	rect3 BoundingBox;
-	mesh Mesh;
-};
-
 internal bool
 AreVerticesIdentical(vertex V0, vertex V1)
 {
@@ -63,7 +36,7 @@ FindVertexIndex(u32 VertexCount, vertex* Vertices, vertex V)
 }
 
 internal kdtree
-LoadKDTreeFromFile(char* Filename)
+LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 {
 	tinyobj::attrib_t Attributes = {};
 	std::vector<tinyobj::shape_t> Shapes = {};
@@ -80,17 +53,17 @@ LoadKDTreeFromFile(char* Filename)
 
 		u32 MaxTriangleCount = (u32)(Mesh.indices.size()) / 3;
 
-		Result.Mesh.TriangleCount = 0;
-		Result.Mesh.Triangles = AllocateArray(triangle, MaxTriangleCount);
+		Result.TriangleCount = 0;
+		Result.Triangles = AllocateArray(triangle, MaxTriangleCount);
 
 		u32 CurrentVertexPoolSize = 16;
-		Result.Mesh.VertexCount = 0;
-		Result.Mesh.Vertices = AllocateArray(vertex, CurrentVertexPoolSize);
+		RenderState->VertexCount = 0;
+		RenderState->Vertices = AllocateArray(vertex, CurrentVertexPoolSize);
 
 		for(u32 TriangleIndex = 0; TriangleIndex < MaxTriangleCount; ++TriangleIndex)
 		{
-			++Result.Mesh.TriangleCount;
-			triangle* Triangle = Result.Mesh.Triangles + TriangleIndex;
+			++Result.TriangleCount;
+			triangle* Triangle = Result.Triangles + TriangleIndex;
 			for(u32 VIndex = 0; VIndex < 3; ++VIndex)
 			{
 				tinyobj::index_t AttributeIndex = Mesh.indices[3 * TriangleIndex + VIndex];
@@ -107,18 +80,18 @@ LoadKDTreeFromFile(char* Filename)
 						Attributes.normals[3 * NormalIndex + 1],
 						Attributes.normals[3 * NormalIndex + 2]);
 
-				u32 VertexIndex = FindVertexIndex(Result.Mesh.VertexCount, Result.Mesh.Vertices, V);
+				u32 VertexIndex = FindVertexIndex(RenderState->VertexCount, RenderState->Vertices, V);
 				if(VertexIndex == VERTEX_NOT_PRESENT)
 				{
-					if(Result.Mesh.VertexCount == CurrentVertexPoolSize)
+					if(RenderState->VertexCount == CurrentVertexPoolSize)
 					{
-						Result.Mesh.Vertices = ReAllocateArray(Result.Mesh.Vertices, vertex, 2 * CurrentVertexPoolSize);
+						RenderState->Vertices = ReAllocateArray(RenderState->Vertices, vertex, 2 * CurrentVertexPoolSize);
 						CurrentVertexPoolSize *= 2;
 					}
 
-					Result.Mesh.Vertices[Result.Mesh.VertexCount] = V;
-					VertexIndex = Result.Mesh.VertexCount;
-					++Result.Mesh.VertexCount;
+					RenderState->Vertices[RenderState->VertexCount] = V;
+					VertexIndex = RenderState->VertexCount;
+					++RenderState->VertexCount;
 				}
 				Triangle->Indices[VIndex] = VertexIndex;
 			}
@@ -128,9 +101,9 @@ LoadKDTreeFromFile(char* Filename)
 	// NOTE(hugo): Compute bounding box
 	Result.BoundingBox = {V3(MAX_REAL, MAX_REAL, MAX_REAL),
 		V3(MIN_REAL, MIN_REAL, MIN_REAL)};
-	for(u32 VertexIndex = 0; VertexIndex < Result.Mesh.VertexCount; ++VertexIndex)
+	for(u32 VertexIndex = 0; VertexIndex < RenderState->VertexCount; ++VertexIndex)
 	{
-		v3 P = Result.Mesh.Vertices[VertexIndex].P;
+		v3 P = RenderState->Vertices[VertexIndex].P;
 		if(P.x > Result.BoundingBox.Max.x)
 		{
 			Result.BoundingBox.Max.x = P.x;
@@ -159,3 +132,26 @@ LoadKDTreeFromFile(char* Filename)
 
 	return(Result);
 };
+
+internal void
+RayKdTreeIntersection(ray Ray, kdtree* Node, render_state* RenderState, hit_record* ClosestHitRecord)
+{
+	rect3 SceneBoundingBox = RenderState->Scene.BoundingBox;
+	if(RayHitBoundingBox(Ray, SceneBoundingBox))
+	{
+		if(Node->Left)
+		{
+			RayKdTreeIntersection(Ray, Node->Left, RenderState, ClosestHitRecord);
+		}
+		if(Node->Right)
+		{
+			RayKdTreeIntersection(Ray, Node->Right, RenderState, ClosestHitRecord);
+		}
+
+		for(u32 TriangleIndex = 0; TriangleIndex < Node->TriangleCount; ++TriangleIndex)
+		{
+			triangle T = Node->Triangles[TriangleIndex];
+			RayTriangleIntersection(Ray, T, RenderState->Vertices, ClosestHitRecord);
+		}
+	}
+}
