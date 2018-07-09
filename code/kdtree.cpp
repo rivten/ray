@@ -35,6 +35,145 @@ FindVertexIndex(u32 VertexCount, vertex* Vertices, vertex V)
 	return(Result);
 }
 
+#define ToImplement Assert(!"To Implement")
+
+internal bool
+KdTreeEndBuild(kdtree* Tree)
+{
+	// TODO(hugo): Improve this
+	// with a better heuristic
+	return(Tree->TriangleCount < 10);
+}
+
+// NOTE(hugo): A plane is a v4 of equation
+// <x, n> = 0
+// ax + by + cz + d = 0
+// So we store n = (a, b, c, d)
+typedef v4 plane;
+
+internal plane
+FindSeparatingPlane(kdtree* Tree, u32 CurrentDepth)
+{
+	// TODO(hugo): Improve this
+	// See 'On building fast kd-Trees for Ray Tracing,
+	// and on doing that in O(N log N)'
+	// Basically : Surface Area Heuristic (SAH)
+
+	u32 AxisIndex = CurrentDepth % 3;
+	plane Result = {};
+	switch(AxisIndex)
+	{
+		case 0:
+			{
+				// NOTE(hugo): X Axis
+				float Midpoint = -0.5f * (Tree->BoundingBox.Max.x + Tree->BoundingBox.Min.x);
+				Result = V4(1.0f, 0.0f, 0.0f, Midpoint);
+			} break;
+		case 1:
+			{
+				// NOTE(hugo): Y Axis
+				float Midpoint = -0.5f * (Tree->BoundingBox.Max.y + Tree->BoundingBox.Min.y);
+				Result = V4(0.0f, 1.0f, 0.0f, Midpoint);
+			} break;
+		case 2:
+			{
+				// NOTE(hugo): Z Axis
+				float Midpoint = -0.5f * (Tree->BoundingBox.Max.z + Tree->BoundingBox.Min.z);
+				Result = V4(0.0f, 0.0f, 1.0f, Midpoint);
+			} break;
+		InvalidDefaultCase;
+	}
+	return(Result);
+}
+
+struct triangle_plane_separation_result
+{
+	u32 LeftTriangleCount;
+	u32 RightTriangleCount;
+	triangle* LeftTrianglePointer;
+	triangle* RightTrianglePointer;
+};
+
+internal triangle_plane_separation_result
+TrianglePlaneSeparation(kdtree* Tree, plane P, render_state* RenderState)
+{
+	ToImplement;
+	triangle_plane_separation_result Result = {};
+	return(Result);
+}
+
+internal void
+ComputeBoundingBox(kdtree* Tree, render_state* RenderState)
+{
+	Tree->BoundingBox = {V3(MAX_REAL, MAX_REAL, MAX_REAL),
+		V3(MIN_REAL, MIN_REAL, MIN_REAL)};
+	for(u32 TriangleIndex = 0; TriangleIndex < Tree->TriangleCount; ++TriangleIndex)
+	{
+		triangle* T = Tree->Triangles + TriangleIndex;
+		for(u32 VertexIndex = 0; VertexIndex < 3; ++VertexIndex)
+		{
+			v3 P = RenderState->Vertices[T->Indices[VertexIndex]].P;
+			if(P.x > Tree->BoundingBox.Max.x)
+			{
+				Tree->BoundingBox.Max.x = P.x;
+			}
+			if(P.y > Tree->BoundingBox.Max.y)
+			{
+				Tree->BoundingBox.Max.y = P.y;
+			}
+			if(P.z > Tree->BoundingBox.Max.z)
+			{
+				Tree->BoundingBox.Max.z = P.z;
+			}
+			if(P.x < Tree->BoundingBox.Min.x)
+			{
+				Tree->BoundingBox.Min.x = P.x;
+			}
+			if(P.y < Tree->BoundingBox.Min.y)
+			{
+				Tree->BoundingBox.Min.y = P.y;
+			}
+			if(P.z < Tree->BoundingBox.Min.z)
+			{
+				Tree->BoundingBox.Min.z = P.z;
+			}
+		}
+	}
+}
+
+internal void
+BuildKdTree(kdtree* Tree, u32 CurrentDepth, render_state* RenderState)
+{
+	if(KdTreeEndBuild(Tree))
+	{
+		return;
+	}
+	plane P = FindSeparatingPlane(Tree, CurrentDepth);
+	triangle_plane_separation_result Separation = TrianglePlaneSeparation(Tree, P, RenderState);
+	Assert(Separation.LeftTriangleCount + Separation.RightTriangleCount == Tree->TriangleCount);
+
+	// TODO(hugo): Not optimal to allocate this way.
+	// I guess I should get them from a pool to have the nodes
+	// tightly packed
+	kdtree* SubTrees = AllocateArray(kdtree, 2);
+	Tree->Left = SubTrees + 0;
+	Tree->Right = SubTrees + 1;
+
+	Tree->Left->TriangleCount = Separation.LeftTriangleCount;
+	Tree->Left->Triangles = Separation.LeftTrianglePointer;
+	ComputeBoundingBox(Tree->Left, RenderState);
+	BuildKdTree(Tree->Left, CurrentDepth + 1, RenderState);
+
+	Tree->Right->TriangleCount = Separation.RightTriangleCount;
+	Tree->Right->Triangles = Separation.RightTrianglePointer;
+	ComputeBoundingBox(Tree->Right, RenderState);
+	BuildKdTree(Tree->Right, CurrentDepth + 1, RenderState);
+
+	// NOTE(hugo): Let's say that this node
+	// does not contain any triangles.
+	Tree->TriangleCount = 0;
+}
+
 internal kdtree
 LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 {
@@ -129,6 +268,10 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 			Result.BoundingBox.Min.z = P.z;
 		}
 	}
+
+	printf("Building the KD Tree...\n");
+	BuildKdTree(&Result, 0, RenderState);
+	printf("KD Tree built !\n");
 
 	return(Result);
 };
