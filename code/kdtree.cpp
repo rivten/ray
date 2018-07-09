@@ -45,11 +45,20 @@ KdTreeEndBuild(kdtree* Tree)
 	return(Tree->TriangleCount < 10);
 }
 
-// NOTE(hugo): A plane is a v4 of equation
-// <x, n> = 0
-// ax + by + cz + d = 0
-// So we store n = (a, b, c, d)
-typedef v4 plane;
+enum plane_axis
+{
+	Plane_X,
+	Plane_Y,
+	Plane_Z,
+};
+
+// NOTE(hugo): This plane
+// has equation Axis = k
+struct plane
+{
+	plane_axis Axis;
+	float k;
+};
 
 internal plane
 FindSeparatingPlane(kdtree* Tree, u32 CurrentDepth)
@@ -67,19 +76,19 @@ FindSeparatingPlane(kdtree* Tree, u32 CurrentDepth)
 			{
 				// NOTE(hugo): X Axis
 				float Midpoint = -0.5f * (Tree->BoundingBox.Max.x + Tree->BoundingBox.Min.x);
-				Result = V4(1.0f, 0.0f, 0.0f, Midpoint);
+				Result = {Plane_X, Midpoint};
 			} break;
 		case 1:
 			{
 				// NOTE(hugo): Y Axis
 				float Midpoint = -0.5f * (Tree->BoundingBox.Max.y + Tree->BoundingBox.Min.y);
-				Result = V4(0.0f, 1.0f, 0.0f, Midpoint);
+				Result = {Plane_Y, Midpoint};
 			} break;
 		case 2:
 			{
 				// NOTE(hugo): Z Axis
 				float Midpoint = -0.5f * (Tree->BoundingBox.Max.z + Tree->BoundingBox.Min.z);
-				Result = V4(0.0f, 0.0f, 1.0f, Midpoint);
+				Result = {Plane_Z, Midpoint};
 			} break;
 		InvalidDefaultCase;
 	}
