@@ -75,19 +75,19 @@ FindSeparatingPlane(kdtree* Tree, u32 CurrentDepth)
 		case 0:
 			{
 				// NOTE(hugo): X Axis
-				float Midpoint = -0.5f * (Tree->BoundingBox.Max.x + Tree->BoundingBox.Min.x);
+				float Midpoint = 0.5f * (Tree->BoundingBox.Max.x + Tree->BoundingBox.Min.x);
 				Result = {Plane_X, Midpoint};
 			} break;
 		case 1:
 			{
 				// NOTE(hugo): Y Axis
-				float Midpoint = -0.5f * (Tree->BoundingBox.Max.y + Tree->BoundingBox.Min.y);
+				float Midpoint = 0.5f * (Tree->BoundingBox.Max.y + Tree->BoundingBox.Min.y);
 				Result = {Plane_Y, Midpoint};
 			} break;
 		case 2:
 			{
 				// NOTE(hugo): Z Axis
-				float Midpoint = -0.5f * (Tree->BoundingBox.Max.z + Tree->BoundingBox.Min.z);
+				float Midpoint = 0.5f * (Tree->BoundingBox.Max.z + Tree->BoundingBox.Min.z);
 				Result = {Plane_Z, Midpoint};
 			} break;
 		InvalidDefaultCase;
@@ -99,15 +99,69 @@ struct triangle_plane_separation_result
 {
 	u32 LeftTriangleCount;
 	u32 RightTriangleCount;
-	triangle* LeftTrianglePointer;
-	triangle* RightTrianglePointer;
 };
+
+internal v3
+GetIsobarycenter(triangle* T, render_state* RenderState)
+{
+	v3 Result = {};
+	Result += RenderState->Vertices[T->Indices[0]].P;
+	Result += RenderState->Vertices[T->Indices[1]].P;
+	Result += RenderState->Vertices[T->Indices[2]].P;
+	Result /= 3.0f;
+
+	return(Result);
+}
 
 internal triangle_plane_separation_result
 TrianglePlaneSeparation(kdtree* Tree, plane P, render_state* RenderState)
 {
-	ToImplement;
 	triangle_plane_separation_result Result = {};
+	triangle* CurrentTriangle = Tree->Triangles;
+	triangle* ToWriteRight = Tree->Triangles + (Tree->TriangleCount - 1);
+	while(CurrentTriangle != (ToWriteRight + 1))
+	{
+		// TODO(hugo): Is the isobarycenter the right choice here ?
+		v3 IsoBar = GetIsobarycenter(CurrentTriangle, RenderState);
+
+		// TODO(hugo): If I _know_ that the planes are one of 
+		// three possibilities, why not do three functions
+		// TrianglePlaneSeparation_X/Y/Z ?
+		float IsoBarComponent = 0.0f;
+		switch(P.Axis)
+		{
+			case Plane_X:
+				{
+					IsoBarComponent = IsoBar.x;
+				} break;
+			case Plane_Y:
+				{
+					IsoBarComponent = IsoBar.y;
+				} break;
+			case Plane_Z:
+				{
+					IsoBarComponent = IsoBar.z;
+				} break;
+			InvalidDefaultCase;
+		}
+
+		if(IsoBarComponent <= P.k)
+		{
+			// NOTE(hugo): The triangle is
+			// currently at the right place.
+			++CurrentTriangle;
+			++Result.LeftTriangleCount;
+		}
+		else
+		{
+			triangle TempTriangle = *ToWriteRight;
+			*ToWriteRight = *CurrentTriangle;
+			*CurrentTriangle = TempTriangle;
+			++Result.RightTriangleCount;
+			--ToWriteRight;
+		}
+	}
+
 	return(Result);
 }
 
@@ -169,12 +223,12 @@ BuildKdTree(kdtree* Tree, u32 CurrentDepth, render_state* RenderState)
 	Tree->Right = SubTrees + 1;
 
 	Tree->Left->TriangleCount = Separation.LeftTriangleCount;
-	Tree->Left->Triangles = Separation.LeftTrianglePointer;
+	Tree->Left->Triangles = Tree->Triangles;
 	ComputeBoundingBox(Tree->Left, RenderState);
 	BuildKdTree(Tree->Left, CurrentDepth + 1, RenderState);
 
 	Tree->Right->TriangleCount = Separation.RightTriangleCount;
-	Tree->Right->Triangles = Separation.RightTrianglePointer;
+	Tree->Right->Triangles = Tree->Triangles + Separation.LeftTriangleCount;
 	ComputeBoundingBox(Tree->Right, RenderState);
 	BuildKdTree(Tree->Right, CurrentDepth + 1, RenderState);
 
@@ -288,8 +342,8 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 internal void
 RayKdTreeIntersection(ray Ray, kdtree* Node, render_state* RenderState, hit_record* ClosestHitRecord)
 {
-	rect3 SceneBoundingBox = RenderState->Scene.BoundingBox;
-	if(RayHitBoundingBox(Ray, SceneBoundingBox))
+	rect3 NodeBoundingBox = Node->BoundingBox;
+	if(RayHitBoundingBox(Ray, NodeBoundingBox))
 	{
 		if(Node->Left)
 		{

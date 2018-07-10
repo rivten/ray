@@ -31,8 +31,8 @@ RandomUnilateral(void)
 global_variable u32 GlobalWindowWidth = 1024;
 global_variable u32 GlobalWindowHeight = 1024;
 #else
-global_variable u32 GlobalWindowWidth = 256;
-global_variable u32 GlobalWindowHeight = 256;
+global_variable u32 GlobalWindowWidth = 512;
+global_variable u32 GlobalWindowHeight = 512;
 #endif
 global_variable bool GlobalRunning = true;
 global_variable bool GlobalComputed = false;
