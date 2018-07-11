@@ -38,6 +38,9 @@ global_variable bool GlobalRunning = true;
 global_variable bool GlobalComputed = false;
 global_variable u32 GlobalAACount = 20000;
 
+// NOTE(hugo): DEBUG DATA
+global_variable u32 DEBUGRayCount = 0;
+global_variable u64 DEBUGCycleCountPass = 0;
 
 internal u32
 RGBToPixel(u8 R, u8 G, u8 B)
@@ -409,6 +412,7 @@ RaySphereIntersection(sphere* S, ray Ray, hit_record* ClosestHitRecord)
 internal v3
 ShootRay(render_state* RenderState, ray Ray)
 {
+	++DEBUGRayCount;
 	hit_record ClosestHitRecord = {};
 	ClosestHitRecord.t = MAX_FLOAT32;
 
@@ -534,6 +538,8 @@ int main(int ArgumentCount, char** Arguments)
 
 	u32 CurrentAAIndex = 0;
 
+	double PerformanceFrequency = double(SDL_GetPerformanceFrequency());
+
 	while(GlobalRunning)
 	{
 		// NOTE(hugo): Input
@@ -557,7 +563,19 @@ int main(int ArgumentCount, char** Arguments)
 		if(CurrentAAIndex < GlobalAACount)
 		{
 			printf("Rendering pass %i\n", CurrentAAIndex);
+			DEBUGRayCount = 0;
+			DEBUGCycleCountPass = SDL_GetPerformanceCounter();
 			RenderBackbuffer(&RenderState, Backbuffer);
+
+			{
+				u64 CurrentCycleCountPass = SDL_GetPerformanceCounter();
+				u64 CyclesPass = CurrentCycleCountPass - DEBUGCycleCountPass;
+				double ElapsedMS = 1000.0f * double(CyclesPass) / PerformanceFrequency;
+				printf("\tPass %i rendered. %u rays. %fms. %f rays per ms.\n",
+						CurrentAAIndex,
+						DEBUGRayCount, ElapsedMS, float(DEBUGRayCount) / ElapsedMS);
+			}
+
 			++CurrentAAIndex;
 			for(u32 PixelIndex = 0; PixelIndex < GlobalWindowWidth * GlobalWindowHeight; ++PixelIndex)
 			{
@@ -565,6 +583,7 @@ int main(int ArgumentCount, char** Arguments)
 				v3 Color = Backbuffer[PixelIndex];
 				*Pixel = LinearToPixel(Color / float(CurrentAAIndex));
 			}
+
 			SDL_UpdateWindowSurface(Window);
 			GlobalComputed = true;
 		}
