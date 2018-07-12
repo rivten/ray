@@ -409,8 +409,15 @@ RaySphereIntersection(sphere* S, ray Ray, hit_record* ClosestHitRecord)
 
 #include "kdtree.cpp"
 
+struct ray_context
+{
+	u32 Depth;
+	v3 Throughput;
+};
+
+// TODO(hugo): Maybe unroll this recursive call ?
 internal v3
-ShootRay(render_state* RenderState, ray Ray)
+ShootRay(render_state* RenderState, ray Ray, ray_context* Context)
 {
 	++DEBUGRayCount;
 	hit_record ClosestHitRecord = {};
@@ -434,9 +441,26 @@ ShootRay(render_state* RenderState, ray Ray)
 		material* M = RenderState->Materials + ClosestHitRecord.MaterialIndex;
 
 		NextRay.Dir = Normalized(Lerp(TargetSpecular, M->Scatter, TargetDiffuse));
-		// TODO(hugo): Russian roulette parameter to avoid
-		// too many computations ?
-		return(M->Attenuation * Hadamard(M->Albedo, ShootRay(RenderState, NextRay)));
+
+		v3 RayColor = M->Attenuation * M->Albedo;
+
+		// NOTE(hugo): Russian Roulette Path Termination
+		// {
+		Context->Throughput = Hadamard(Context->Throughput, RayColor);
+		float RussianRouletteP = Maxf(Context->Throughput.x, Maxf(Context->Throughput.y, Context->Throughput.y));
+		if(Context->Depth > 0)
+		{
+			if(RandomUnilateral() > RussianRouletteP)
+			{
+				return(RayColor);
+			}
+		}
+
+		Context->Throughput *= 1.0f / RussianRouletteP;
+		++Context->Depth;
+		// }
+
+		return(Hadamard(RayColor, ShootRay(RenderState, NextRay, Context)));
 	}
 	else
 	{
@@ -477,7 +501,9 @@ RenderBackbuffer(render_state* RenderState, v3* Backbuffer)
 			// TODO(hugo): Do we need to have a normalized direction ? Maybe not...
 			Ray.Dir = Normalized(PixelWorldSpace - Ray.Start);
 
-			*Color += ShootRay(RenderState, Ray);
+			ray_context Context = {};
+			Context.Throughput = V3(1.0f, 1.0f, 1.0f);
+			*Color += ShootRay(RenderState, Ray, &Context);
 		}
 	}
 }
