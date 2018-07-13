@@ -23,15 +23,10 @@ struct mesh
 
 struct kdtree
 {
-	rect3 BoundingBox;
-
-	// TODO(hugo): Do I need to set some conventions
-	// here like "if Left or Right is not null, then
-	// the node contains no triangles" ? Does it matter ?
+	u32 LeftIndex;
+	u32 RightIndex;
 	u32 TriangleCount;
 	triangle* Triangles;
-
-	kdtree* Left;
-	kdtree* Right;
+	rect3 BoundingBox;
 };
 

@@ -204,7 +204,8 @@ ComputeBoundingBox(kdtree* Tree, render_state* RenderState)
 	}
 }
 
-internal kdtree* GetKDTreeFromPool(render_state* RenderState);
+internal kdtree* GetKDTreeFromPool(u32 Index, render_state* RenderState);
+internal u32 CreateKDTree(render_state* RenderState);
 
 internal void
 BuildKdTree(kdtree* Tree, u32 CurrentDepth, render_state* RenderState)
@@ -217,18 +218,20 @@ BuildKdTree(kdtree* Tree, u32 CurrentDepth, render_state* RenderState)
 	triangle_plane_separation_result Separation = TrianglePlaneSeparation(Tree, P, RenderState);
 	Assert(Separation.LeftTriangleCount + Separation.RightTriangleCount == Tree->TriangleCount);
 
-	Tree->Left = GetKDTreeFromPool(RenderState);
-	Tree->Right = GetKDTreeFromPool(RenderState);
+	Tree->LeftIndex = CreateKDTree(RenderState);
+	kdtree* LeftTree = GetKDTreeFromPool(Tree->LeftIndex, RenderState);
+	Tree->RightIndex = CreateKDTree(RenderState);
+	kdtree* RightTree = GetKDTreeFromPool(Tree->RightIndex, RenderState);
 
-	Tree->Left->TriangleCount = Separation.LeftTriangleCount;
-	Tree->Left->Triangles = Tree->Triangles;
-	ComputeBoundingBox(Tree->Left, RenderState);
-	BuildKdTree(Tree->Left, CurrentDepth + 1, RenderState);
+	LeftTree->TriangleCount = Separation.LeftTriangleCount;
+	LeftTree->Triangles = Tree->Triangles;
+	ComputeBoundingBox(LeftTree, RenderState);
+	BuildKdTree(LeftTree, CurrentDepth + 1, RenderState);
 
-	Tree->Right->TriangleCount = Separation.RightTriangleCount;
-	Tree->Right->Triangles = Tree->Triangles + Separation.LeftTriangleCount;
-	ComputeBoundingBox(Tree->Right, RenderState);
-	BuildKdTree(Tree->Right, CurrentDepth + 1, RenderState);
+	RightTree->TriangleCount = Separation.RightTriangleCount;
+	RightTree->Triangles = Tree->Triangles + Separation.LeftTriangleCount;
+	ComputeBoundingBox(RightTree, RenderState);
+	BuildKdTree(RightTree, CurrentDepth + 1, RenderState);
 
 	// NOTE(hugo): Let's say that this node
 	// does not contain any triangles.
@@ -236,28 +239,34 @@ BuildKdTree(kdtree* Tree, u32 CurrentDepth, render_state* RenderState)
 }
 
 internal void
-DEBUGOutputTreeGraphvizRec(FILE* f, kdtree* Node)
+DEBUGOutputTreeGraphvizRec(FILE* f, kdtree* Node, u32 NodeIndex, render_state* RenderState)
 {
-	if(Node->Left)
+	Assert(Node);
+	kdtree* Left = GetKDTreeFromPool(Node->LeftIndex, RenderState);
+	if(Left)
 	{
-		fprintf(f, "\t\"%p\" -> \"%p\" /* %ld */\n", Node, Node->Left, (char*)Node->Left - (char*)Node);
-		DEBUGOutputTreeGraphvizRec(f, Node->Left);
+		//fprintf(f, "\t\"%p\" -> \"%p\" /* %ld */\n", Node, Left, (char*)Left - (char*)Node);
+		fprintf(f, "\t\"%u\" -> \"%u\"\n", NodeIndex, Node->LeftIndex);
+		DEBUGOutputTreeGraphvizRec(f, Left, Node->LeftIndex, RenderState);
 	}
-	if(Node->Right)
+
+	kdtree* Right = GetKDTreeFromPool(Node->RightIndex, RenderState);
+	if(Right)
 	{
-		fprintf(f, "\t\"%p\" -> \"%p\" /* %ld */\n", Node, Node->Right, (char*)Node->Right - (char*)Node);
-		DEBUGOutputTreeGraphvizRec(f, Node->Right);
+		//fprintf(f, "\t\"%p\" -> \"%p\" /* %ld */\n", Node, Right, (char*)Right - (char*)Node);
+		fprintf(f, "\t\"%u\" -> \"%u\"\n", NodeIndex, Node->RightIndex);
+		DEBUGOutputTreeGraphvizRec(f, Right, Node->RightIndex, RenderState);
 	}
 }
 
 internal void
-DEBUGOutputTreeGraphviz(kdtree* Root)
+DEBUGOutputTreeGraphviz(kdtree* Root, render_state* RenderState)
 {
 	FILE* OutputFile = fopen("kdtree.gv", "w");
 	Assert(OutputFile);
 	fprintf(OutputFile, "digraph G\n{\n");
 	fprintf(OutputFile, "\t/* sizeof(kdtree) = %lu */\n", sizeof(kdtree));
-	DEBUGOutputTreeGraphvizRec(OutputFile, Root);
+	DEBUGOutputTreeGraphvizRec(OutputFile, Root, 0, RenderState);
 	fprintf(OutputFile, "}");
 	fclose(OutputFile);
 
@@ -273,7 +282,8 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 			0, Filename, 0, true);
 	Assert(LoadObjResult);
 
-	kdtree* Result = GetKDTreeFromPool(RenderState);
+	u32 ResultIndex = CreateKDTree(RenderState);
+	kdtree* Result = GetKDTreeFromPool(ResultIndex, RenderState);
 
 	for(u32 ShapeIndex = 0; ShapeIndex < Shapes.size(); ++ShapeIndex)
 	{
@@ -363,7 +373,7 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 	printf("KD Tree built !\n");
 
 #if 1
-	DEBUGOutputTreeGraphviz(Result);
+	DEBUGOutputTreeGraphviz(Result, RenderState);
 #endif
 
 	return(*Result);
@@ -375,13 +385,15 @@ RayKdTreeIntersection(ray Ray, kdtree* Node, render_state* RenderState, hit_reco
 	rect3 NodeBoundingBox = Node->BoundingBox;
 	if(RayHitBoundingBox(Ray, NodeBoundingBox))
 	{
-		if(Node->Left)
+		kdtree* Left = GetKDTreeFromPool(Node->LeftIndex, RenderState);
+		if(Left)
 		{
-			RayKdTreeIntersection(Ray, Node->Left, RenderState, ClosestHitRecord);
+			RayKdTreeIntersection(Ray, Left, RenderState, ClosestHitRecord);
 		}
-		if(Node->Right)
+		kdtree* Right = GetKDTreeFromPool(Node->RightIndex, RenderState);
+		if(Right)
 		{
-			RayKdTreeIntersection(Ray, Node->Right, RenderState, ClosestHitRecord);
+			RayKdTreeIntersection(Ray, Right, RenderState, ClosestHitRecord);
 		}
 
 		for(u32 TriangleIndex = 0; TriangleIndex < Node->TriangleCount; ++TriangleIndex)

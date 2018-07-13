@@ -561,13 +561,30 @@ GetShootRayBlockData(render_state* RenderState)
 	return(Result);
 }
 
-internal kdtree*
-GetKDTreeFromPool(render_state* RenderState)
+#define KD_TREE_NO_CHILD 0xFFFFFFFF
+internal u32
+CreateKDTree(render_state* RenderState)
 {
 	Assert(RenderState->TreeCount < RenderState->TreeMaxPoolCount);
-	kdtree* Result = RenderState->Trees + RenderState->TreeCount;
+	u32 Result = RenderState->TreeCount;
+
+	kdtree* Tree = RenderState->Trees + RenderState->TreeCount;
+	Tree->LeftIndex = KD_TREE_NO_CHILD;
+	Tree->RightIndex = KD_TREE_NO_CHILD;
+
 	++RenderState->TreeCount;
 	return(Result);
+}
+
+internal kdtree*
+GetKDTreeFromPool(u32 Index, render_state* RenderState)
+{
+	if(Index < RenderState->TreeCount)
+	{
+		kdtree* Result = RenderState->Trees + Index;
+		return(Result);
+	}
+	return(0);
 }
 
 internal void
