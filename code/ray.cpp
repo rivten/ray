@@ -39,9 +39,14 @@ global_variable bool GlobalRunning = true;
 global_variable bool GlobalComputed = false;
 global_variable u32 GlobalAACount = 20000;
 
+global_variable u32 GlobalBlockWidth = 32;
+global_variable u32 GlobalBlockHeight = 32;
+
+#if 1
 // NOTE(hugo): DEBUG DATA
 global_variable u32 DEBUGRayCount = 0;
 global_variable u64 DEBUGCycleCountPass = 0;
+#endif
 
 internal u32
 RGBToPixel(u8 R, u8 G, u8 B)
@@ -108,6 +113,17 @@ struct persistent_render_value
 	v3 CameraYAxis;
 };
 
+#include "multithreading.h"
+
+struct render_state;
+struct shoot_ray_block_data
+{
+	v3* Backbuffer;
+	render_state* RenderState;
+	u32 BlockStartX;
+	u32 BlockStartY;
+};
+
 struct render_state
 {
 	u32 SphereCount;
@@ -125,6 +141,11 @@ struct render_state
 	float FocalLength;
 	float FoV;
 	float AspectRatio;
+
+	platform_work_queue Queue;
+
+	u32 ShootRayBlockCount;
+	shoot_ray_block_data ShootRayBlockPool[256];
 
 	random_series Entropy;
 
@@ -428,7 +449,7 @@ struct ray_context
 internal v3
 ShootRay(render_state* RenderState, ray Ray, ray_context* Context)
 {
-	++DEBUGRayCount;
+	//++DEBUGRayCount;
 	hit_record ClosestHitRecord = {};
 	ClosestHitRecord.t = MAX_FLOAT32;
 
@@ -480,18 +501,24 @@ ShootRay(render_state* RenderState, ray Ray, ray_context* Context)
 	}
 }
 
-internal void
-RenderBackbuffer(render_state* RenderState, v3* Backbuffer)
+PLATFORM_WORK_QUEUE_CALLBACK(ShootRayBlock)
 {
+	shoot_ray_block_data* ShootRayBlockData = (shoot_ray_block_data *)Data;
+
+	render_state* RenderState = ShootRayBlockData->RenderState;
 	float ScreenWidth = RenderState->PersistentRenderValue.ScreenWidth;
 	float ScreenHeight = RenderState->PersistentRenderValue.ScreenHeight;
 	v3 CameraYAxis = RenderState->PersistentRenderValue.CameraYAxis;
 
-	for(u32 Y = 0; Y < GlobalWindowHeight; ++Y)
+	u32 StartX = ShootRayBlockData->BlockStartX;
+	u32 EndX = StartX + GlobalBlockWidth;
+	u32 StartY = ShootRayBlockData->BlockStartY;
+	u32 EndY = StartY + GlobalBlockHeight;
+	for(u32 Y = StartY; Y < EndY; ++Y)
 	{
-		for(u32 X = 0; X < GlobalWindowWidth; ++X)
+		for(u32 X = StartX; X < EndX; ++X)
 		{
-			v3* Color = Backbuffer + X + Y * GlobalWindowWidth;
+			v3* Color = ShootRayBlockData->Backbuffer + X + Y * GlobalWindowWidth;
 
 			ray Ray = {};
 			Ray.Start = RenderState->Camera.P;
@@ -505,7 +532,7 @@ RenderBackbuffer(render_state* RenderState, v3* Backbuffer)
 			Assert(XOffset >= 0.0f && XOffset <= 1.0f);
 			Assert(YOffset >= 0.0f && YOffset <= 1.0f);
 			v2 PixelRelativeCoordInScreen = V2(((float(X) + XOffset) / float(GlobalWindowWidth)) - 0.5f, 0.5f - ((float(Y) + YOffset) / float(GlobalWindowHeight)));
-			v3 PixelWorldSpace = RenderState->Camera.P - RenderState->FocalLength * RenderState->Camera.ZAxis + 
+			v3 PixelWorldSpace = RenderState->Camera.P - RenderState->FocalLength * RenderState->Camera.ZAxis +
 				PixelRelativeCoordInScreen.x * ScreenWidth * RenderState->Camera.XAxis + PixelRelativeCoordInScreen.y * ScreenHeight * CameraYAxis;
 			// TODO(hugo): Do we need to have a normalized direction ? Maybe not...
 			Ray.Dir = Normalized(PixelWorldSpace - Ray.Start);
@@ -513,6 +540,36 @@ RenderBackbuffer(render_state* RenderState, v3* Backbuffer)
 			ray_context Context = {};
 			Context.Throughput = V3(1.0f, 1.0f, 1.0f);
 			*Color += ShootRay(RenderState, Ray, &Context);
+		}
+	}
+}
+
+internal shoot_ray_block_data*
+GetShootRayBlockData(render_state* RenderState)
+{
+	Assert(RenderState->ShootRayBlockCount < ArrayCount(RenderState->ShootRayBlockPool));
+	shoot_ray_block_data* Result = RenderState->ShootRayBlockPool + RenderState->ShootRayBlockCount;
+	++RenderState->ShootRayBlockCount;
+	return(Result);
+}
+
+internal void
+RenderBackbuffer(render_state* RenderState, v3* Backbuffer)
+{
+	Assert(GlobalWindowHeight % GlobalBlockHeight == 0);
+	Assert(GlobalWindowWidth % GlobalBlockWidth == 0);
+	u32 YBlockCount = GlobalWindowHeight / GlobalBlockHeight;
+	u32 XBlockCount = GlobalWindowWidth / GlobalBlockWidth;
+	for(u32 YBlock = 0; YBlock < YBlockCount; ++YBlock)
+	{
+		for(u32 XBlock = 0; XBlock < XBlockCount; ++XBlock)
+		{
+			shoot_ray_block_data* ShootRayBlockData = GetShootRayBlockData(RenderState);
+			ShootRayBlockData->BlockStartX = GlobalBlockWidth * XBlock;
+			ShootRayBlockData->BlockStartY = GlobalBlockHeight * YBlock;
+			ShootRayBlockData->Backbuffer = Backbuffer;
+			ShootRayBlockData->RenderState = RenderState;
+			SDLAddEntry(&RenderState->Queue, ShootRayBlock, ShootRayBlockData);
 		}
 	}
 }
@@ -561,6 +618,13 @@ int main(int ArgumentCount, char** Arguments)
 
 	RenderState.Scene = LoadKDTreeFromFile("../data/teapot_with_normal.obj", &RenderState);
 
+	RenderState.ShootRayBlockCount = 0;
+
+	// NOTE(hugo): Multithreading init
+	RenderState.Queue = {};
+	sdl_thread_startup Startups[4] = {};
+	SDLMakeQueue(&RenderState.Queue, ArrayCount(Startups), Startups);
+
 	PushMaterial(&RenderState, {V3(0.8f, 0.2f, 0.1f), 0.5f, 0.9f});
 	PushMaterial(&RenderState, {V3(0.2f, 1.0f, 0.5f), 0.5f, 0.5f});
 	PushMaterial(&RenderState, {V3(0.0f, 0.7f, 1.0f), 0.8f, 0.1f});
@@ -604,6 +668,9 @@ int main(int ArgumentCount, char** Arguments)
 			DEBUGRayCount = 0;
 			DEBUGCycleCountPass = SDL_GetPerformanceCounter();
 			RenderBackbuffer(&RenderState, Backbuffer);
+
+			SDLCompleteAllWork(&RenderState.Queue);
+			RenderState.ShootRayBlockCount = 0;
 
 			{
 				u64 CurrentCycleCountPass = SDL_GetPerformanceCounter();
