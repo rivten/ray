@@ -12,6 +12,7 @@
 #include "kdtree.h"
 
 #define USE_ENTROPY 0
+#define RAY_COMPUTE_VARIATION 1
 
 #if !USE_ENTROPY
 #include <time.h>
@@ -69,6 +70,14 @@ LinearToPixel(v3 Color)
 	v3 GammaCorrectedColor = V3(SquareRoot(Color.x),
 			SquareRoot(Color.y), SquareRoot(Color.z));
 	return(RGBToPixel(GammaCorrectedColor));
+}
+
+internal v3
+LinearToSRGB(v3 Linear)
+{
+	v3 GammaCorrectedColor = V3(SquareRoot(Linear.x),
+			SquareRoot(Linear.y), SquareRoot(Linear.z));
+	return(GammaCorrectedColor);
 }
 
 struct camera
@@ -531,6 +540,9 @@ int main(int ArgumentCount, char** Arguments)
 	Assert(Screen);
 
 	v3* Backbuffer = AllocateArray(v3, GlobalWindowWidth * GlobalWindowHeight);
+#if RAY_COMPUTE_VARIATION
+	v3* PreviousScreen = AllocateArray(v3, GlobalWindowWidth * GlobalWindowHeight);
+#endif
 
 	render_state RenderState = {};
 	//RenderState.Camera.P = V3(0.0f, 0.0f, 10.0f);
@@ -603,12 +615,27 @@ int main(int ArgumentCount, char** Arguments)
 			}
 
 			++CurrentAAIndex;
+
+#if RAY_COMPUTE_VARIATION
+			float BufferVariation = 0.0f;
+#endif
 			for(u32 PixelIndex = 0; PixelIndex < GlobalWindowWidth * GlobalWindowHeight; ++PixelIndex)
 			{
 				u32* Pixel = (u32*)(Screen->pixels) + PixelIndex;
 				v3 Color = Backbuffer[PixelIndex];
-				*Pixel = LinearToPixel(Color / float(CurrentAAIndex));
+				v3 SRGBColor = LinearToSRGB(Color / float(CurrentAAIndex));
+#if RAY_COMPUTE_VARIATION
+			{
+				BufferVariation += LengthSqr(SRGBColor - PreviousScreen[PixelIndex]);
+				PreviousScreen[PixelIndex] = SRGBColor;
 			}
+#endif
+				*Pixel = RGBToPixel(SRGBColor);
+			}
+
+#if RAY_COMPUTE_VARIATION
+			printf("\tVariation = %f\n", BufferVariation);
+#endif
 
 			SDL_UpdateWindowSurface(Window);
 			GlobalComputed = true;
