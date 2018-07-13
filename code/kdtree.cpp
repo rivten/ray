@@ -235,6 +235,34 @@ BuildKdTree(kdtree* Tree, u32 CurrentDepth, render_state* RenderState)
 	Tree->TriangleCount = 0;
 }
 
+internal void
+DEBUGOutputTreeGraphvizRec(FILE* f, kdtree* Node)
+{
+	if(Node->Left)
+	{
+		fprintf(f, "\t\"%p\" -> \"%p\" /* %ld */\n", Node, Node->Left, (char*)Node->Left - (char*)Node);
+		DEBUGOutputTreeGraphvizRec(f, Node->Left);
+	}
+	if(Node->Right)
+	{
+		fprintf(f, "\t\"%p\" -> \"%p\" /* %ld */\n", Node, Node->Right, (char*)Node->Right - (char*)Node);
+		DEBUGOutputTreeGraphvizRec(f, Node->Right);
+	}
+}
+
+internal void
+DEBUGOutputTreeGraphviz(kdtree* Root)
+{
+	FILE* OutputFile = fopen("kdtree.gv", "w");
+	Assert(OutputFile);
+	fprintf(OutputFile, "digraph G\n{\n");
+	fprintf(OutputFile, "\t/* sizeof(kdtree) = %lu */\n", sizeof(kdtree));
+	DEBUGOutputTreeGraphvizRec(OutputFile, Root);
+	fprintf(OutputFile, "}");
+	fclose(OutputFile);
+
+}
+
 internal kdtree
 LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 {
@@ -334,6 +362,10 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 	BuildKdTree(Result, 0, RenderState);
 	printf("KD Tree built !\n");
 
+#if 1
+	DEBUGOutputTreeGraphviz(Result);
+#endif
+
 	return(*Result);
 };
 
@@ -359,3 +391,4 @@ RayKdTreeIntersection(ray Ray, kdtree* Node, render_state* RenderState, hit_reco
 		}
 	}
 }
+
