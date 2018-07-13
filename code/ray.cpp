@@ -39,8 +39,8 @@ global_variable bool GlobalRunning = true;
 global_variable bool GlobalComputed = false;
 global_variable u32 GlobalAACount = 20000;
 
-global_variable u32 GlobalBlockWidth = 32;
-global_variable u32 GlobalBlockHeight = 32;
+global_variable u32 GlobalBlockWidth = 64;
+global_variable u32 GlobalBlockHeight = 64;
 
 #if 1
 // NOTE(hugo): DEBUG DATA
@@ -129,7 +129,9 @@ struct render_state
 	u32 SphereCount;
 	sphere Spheres[256];
 
-	kdtree Scene;
+	kdtree* Trees;
+	u32 TreeCount;
+	u32 TreeMaxPoolCount;
 
 	u32 VertexCount;
 	vertex* Vertices;
@@ -460,7 +462,7 @@ ShootRay(render_state* RenderState, ray Ray, ray_context* Context)
 		RaySphereIntersection(S, Ray, &ClosestHitRecord);
 	}
 #endif
-	RayKdTreeIntersection(Ray, &RenderState->Scene, RenderState, &ClosestHitRecord);
+	RayKdTreeIntersection(Ray, &RenderState->Trees[0], RenderState, &ClosestHitRecord);
 
 	if(ClosestHitRecord.t < MAX_FLOAT32)
 	{
@@ -553,6 +555,15 @@ GetShootRayBlockData(render_state* RenderState)
 	return(Result);
 }
 
+internal kdtree*
+GetKDTreeFromPool(render_state* RenderState)
+{
+	Assert(RenderState->TreeCount < RenderState->TreeMaxPoolCount);
+	kdtree* Result = RenderState->Trees + RenderState->TreeCount;
+	++RenderState->TreeCount;
+	return(Result);
+}
+
 internal void
 RenderBackbuffer(render_state* RenderState, v3* Backbuffer)
 {
@@ -616,7 +627,10 @@ int main(int ArgumentCount, char** Arguments)
 
 	RenderState.Entropy = RandomSeed(1234);
 
-	RenderState.Scene = LoadKDTreeFromFile("../data/teapot_with_normal.obj", &RenderState);
+	RenderState.TreeMaxPoolCount = 2 * 2048;
+	RenderState.Trees = AllocateArray(kdtree, RenderState.TreeMaxPoolCount);
+	RenderState.TreeCount = 0;
+	RenderState.Trees[0] = LoadKDTreeFromFile("../data/teapot_with_normal.obj", &RenderState);
 
 	RenderState.ShootRayBlockCount = 0;
 

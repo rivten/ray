@@ -42,7 +42,7 @@ KdTreeEndBuild(kdtree* Tree)
 {
 	// TODO(hugo): Improve this
 	// with a better heuristic
-	return(Tree->TriangleCount < 10);
+	return(Tree->TriangleCount < 15);
 }
 
 enum plane_axis
@@ -204,6 +204,8 @@ ComputeBoundingBox(kdtree* Tree, render_state* RenderState)
 	}
 }
 
+internal kdtree* GetKDTreeFromPool(render_state* RenderState);
+
 internal void
 BuildKdTree(kdtree* Tree, u32 CurrentDepth, render_state* RenderState)
 {
@@ -215,12 +217,8 @@ BuildKdTree(kdtree* Tree, u32 CurrentDepth, render_state* RenderState)
 	triangle_plane_separation_result Separation = TrianglePlaneSeparation(Tree, P, RenderState);
 	Assert(Separation.LeftTriangleCount + Separation.RightTriangleCount == Tree->TriangleCount);
 
-	// TODO(hugo): Not optimal to allocate this way.
-	// I guess I should get them from a pool to have the nodes
-	// tightly packed
-	kdtree* SubTrees = AllocateArray(kdtree, 2);
-	Tree->Left = SubTrees + 0;
-	Tree->Right = SubTrees + 1;
+	Tree->Left = GetKDTreeFromPool(RenderState);
+	Tree->Right = GetKDTreeFromPool(RenderState);
 
 	Tree->Left->TriangleCount = Separation.LeftTriangleCount;
 	Tree->Left->Triangles = Tree->Triangles;
@@ -247,7 +245,7 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 			0, Filename, 0, true);
 	Assert(LoadObjResult);
 
-	kdtree Result = {};
+	kdtree* Result = GetKDTreeFromPool(RenderState);
 
 	for(u32 ShapeIndex = 0; ShapeIndex < Shapes.size(); ++ShapeIndex)
 	{
@@ -255,8 +253,8 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 
 		u32 MaxTriangleCount = (u32)(Mesh.indices.size()) / 3;
 
-		Result.TriangleCount = 0;
-		Result.Triangles = AllocateArray(triangle, MaxTriangleCount);
+		Result->TriangleCount = 0;
+		Result->Triangles = AllocateArray(triangle, MaxTriangleCount);
 
 		u32 CurrentVertexPoolSize = 16;
 		RenderState->VertexCount = 0;
@@ -264,8 +262,8 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 
 		for(u32 TriangleIndex = 0; TriangleIndex < MaxTriangleCount; ++TriangleIndex)
 		{
-			++Result.TriangleCount;
-			triangle* Triangle = Result.Triangles + TriangleIndex;
+			++Result->TriangleCount;
+			triangle* Triangle = Result->Triangles + TriangleIndex;
 			for(u32 VIndex = 0; VIndex < 3; ++VIndex)
 			{
 				tinyobj::index_t AttributeIndex = Mesh.indices[3 * TriangleIndex + VIndex];
@@ -301,42 +299,42 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 	}
 
 	// NOTE(hugo): Compute bounding box
-	Result.BoundingBox = {V3(MAX_REAL, MAX_REAL, MAX_REAL),
+	Result->BoundingBox = {V3(MAX_REAL, MAX_REAL, MAX_REAL),
 		V3(MIN_REAL, MIN_REAL, MIN_REAL)};
 	for(u32 VertexIndex = 0; VertexIndex < RenderState->VertexCount; ++VertexIndex)
 	{
 		v3 P = RenderState->Vertices[VertexIndex].P;
-		if(P.x > Result.BoundingBox.Max.x)
+		if(P.x > Result->BoundingBox.Max.x)
 		{
-			Result.BoundingBox.Max.x = P.x;
+			Result->BoundingBox.Max.x = P.x;
 		}
-		if(P.y > Result.BoundingBox.Max.y)
+		if(P.y > Result->BoundingBox.Max.y)
 		{
-			Result.BoundingBox.Max.y = P.y;
+			Result->BoundingBox.Max.y = P.y;
 		}
-		if(P.z > Result.BoundingBox.Max.z)
+		if(P.z > Result->BoundingBox.Max.z)
 		{
-			Result.BoundingBox.Max.z = P.z;
+			Result->BoundingBox.Max.z = P.z;
 		}
-		if(P.x < Result.BoundingBox.Min.x)
+		if(P.x < Result->BoundingBox.Min.x)
 		{
-			Result.BoundingBox.Min.x = P.x;
+			Result->BoundingBox.Min.x = P.x;
 		}
-		if(P.y < Result.BoundingBox.Min.y)
+		if(P.y < Result->BoundingBox.Min.y)
 		{
-			Result.BoundingBox.Min.y = P.y;
+			Result->BoundingBox.Min.y = P.y;
 		}
-		if(P.z < Result.BoundingBox.Min.z)
+		if(P.z < Result->BoundingBox.Min.z)
 		{
-			Result.BoundingBox.Min.z = P.z;
+			Result->BoundingBox.Min.z = P.z;
 		}
 	}
 
 	printf("Building the KD Tree...\n");
-	BuildKdTree(&Result, 0, RenderState);
+	BuildKdTree(Result, 0, RenderState);
 	printf("KD Tree built !\n");
 
-	return(Result);
+	return(*Result);
 };
 
 internal void
