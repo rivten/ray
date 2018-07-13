@@ -122,6 +122,7 @@ struct shoot_ray_block_data
 	render_state* RenderState;
 	u32 BlockStartX;
 	u32 BlockStartY;
+	u32 RayCount;
 };
 
 struct render_state
@@ -444,6 +445,7 @@ RaySphereIntersection(sphere* S, ray Ray, hit_record* ClosestHitRecord)
 struct ray_context
 {
 	u32 Depth;
+	u32 RayShot;
 	v3 Throughput;
 };
 
@@ -451,7 +453,7 @@ struct ray_context
 internal v3
 ShootRay(render_state* RenderState, ray Ray, ray_context* Context)
 {
-	//++DEBUGRayCount;
+	++Context->RayShot;
 	hit_record ClosestHitRecord = {};
 	ClosestHitRecord.t = MAX_FLOAT32;
 
@@ -541,7 +543,10 @@ PLATFORM_WORK_QUEUE_CALLBACK(ShootRayBlock)
 
 			ray_context Context = {};
 			Context.Throughput = V3(1.0f, 1.0f, 1.0f);
+			Context.RayShot = 0;
 			*Color += ShootRay(RenderState, Ray, &Context);
+
+			ShootRayBlockData->RayCount += Context.RayShot;
 		}
 	}
 }
@@ -551,6 +556,7 @@ GetShootRayBlockData(render_state* RenderState)
 {
 	Assert(RenderState->ShootRayBlockCount < ArrayCount(RenderState->ShootRayBlockPool));
 	shoot_ray_block_data* Result = RenderState->ShootRayBlockPool + RenderState->ShootRayBlockCount;
+	*Result = {};
 	++RenderState->ShootRayBlockCount;
 	return(Result);
 }
@@ -684,6 +690,10 @@ int main(int ArgumentCount, char** Arguments)
 			RenderBackbuffer(&RenderState, Backbuffer);
 
 			SDLCompleteAllWork(&RenderState.Queue);
+			for(u32 WorkIndex = 0; WorkIndex < RenderState.ShootRayBlockCount; ++WorkIndex)
+			{
+				DEBUGRayCount += RenderState.ShootRayBlockPool[WorkIndex].RayCount;
+			}
 			RenderState.ShootRayBlockCount = 0;
 
 			{
