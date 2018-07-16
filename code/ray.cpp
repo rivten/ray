@@ -39,8 +39,8 @@ global_variable bool GlobalRunning = true;
 global_variable bool GlobalComputed = false;
 global_variable u32 GlobalAACount = 20000;
 
-global_variable u32 GlobalBlockWidth = 64;
-global_variable u32 GlobalBlockHeight = 64;
+global_variable u32 GlobalChunkWidth = 64;
+global_variable u32 GlobalChunkHeight = 64;
 
 #if 1
 // NOTE(hugo): DEBUG DATA
@@ -118,10 +118,10 @@ struct persistent_render_value
 struct render_state;
 struct shoot_ray_block_data
 {
-	v3* Backbuffer;
+	v3* BackbufferChunk;
 	render_state* RenderState;
-	u32 BlockStartX;
-	u32 BlockStartY;
+	u32 ChunkStartX;
+	u32 ChunkStartY;
 	u32 RayCount;
 };
 
@@ -147,8 +147,8 @@ struct render_state
 
 	platform_work_queue Queue;
 
-	u32 ShootRayBlockCount;
-	shoot_ray_block_data ShootRayBlockPool[256];
+	u32 ShootRayChunkCount;
+	shoot_ray_block_data ShootRayChunkPool[256];
 
 	random_series Entropy;
 
@@ -505,24 +505,24 @@ ShootRay(render_state* RenderState, ray Ray, ray_context* Context)
 	}
 }
 
-PLATFORM_WORK_QUEUE_CALLBACK(ShootRayBlock)
+PLATFORM_WORK_QUEUE_CALLBACK(ShootRayChunk)
 {
-	shoot_ray_block_data* ShootRayBlockData = (shoot_ray_block_data *)Data;
+	shoot_ray_block_data* ShootRayChunkData = (shoot_ray_block_data *)Data;
 
-	render_state* RenderState = ShootRayBlockData->RenderState;
+	render_state* RenderState = ShootRayChunkData->RenderState;
 	float ScreenWidth = RenderState->PersistentRenderValue.ScreenWidth;
 	float ScreenHeight = RenderState->PersistentRenderValue.ScreenHeight;
 	v3 CameraYAxis = RenderState->PersistentRenderValue.CameraYAxis;
 
-	u32 StartX = ShootRayBlockData->BlockStartX;
-	u32 EndX = StartX + GlobalBlockWidth;
-	u32 StartY = ShootRayBlockData->BlockStartY;
-	u32 EndY = StartY + GlobalBlockHeight;
+	u32 StartX = ShootRayChunkData->ChunkStartX;
+	u32 EndX = StartX + GlobalChunkWidth;
+	u32 StartY = ShootRayChunkData->ChunkStartY;
+	u32 EndY = StartY + GlobalChunkHeight;
 	for(u32 Y = StartY; Y < EndY; ++Y)
 	{
 		for(u32 X = StartX; X < EndX; ++X)
 		{
-			v3* Color = ShootRayBlockData->Backbuffer + X + Y * GlobalWindowWidth;
+			v3* Color = ShootRayChunkData->BackbufferChunk + (X - StartX) + (Y - StartY) * GlobalChunkWidth;
 
 			ray Ray = {};
 			Ray.Start = RenderState->Camera.P;
@@ -546,18 +546,18 @@ PLATFORM_WORK_QUEUE_CALLBACK(ShootRayBlock)
 			Context.RayShot = 0;
 			*Color += ShootRay(RenderState, Ray, &Context);
 
-			ShootRayBlockData->RayCount += Context.RayShot;
+			ShootRayChunkData->RayCount += Context.RayShot;
 		}
 	}
 }
 
 internal shoot_ray_block_data*
-GetShootRayBlockData(render_state* RenderState)
+GetShootRayChunkData(render_state* RenderState)
 {
-	Assert(RenderState->ShootRayBlockCount < ArrayCount(RenderState->ShootRayBlockPool));
-	shoot_ray_block_data* Result = RenderState->ShootRayBlockPool + RenderState->ShootRayBlockCount;
+	Assert(RenderState->ShootRayChunkCount < ArrayCount(RenderState->ShootRayChunkPool));
+	shoot_ray_block_data* Result = RenderState->ShootRayChunkPool + RenderState->ShootRayChunkCount;
 	*Result = {};
-	++RenderState->ShootRayBlockCount;
+	++RenderState->ShootRayChunkCount;
 	return(Result);
 }
 
@@ -588,22 +588,22 @@ GetKDTreeFromPool(u32 Index, render_state* RenderState)
 }
 
 internal void
-RenderBackbuffer(render_state* RenderState, v3* Backbuffer)
+RenderBackbuffer(render_state* RenderState)
 {
-	Assert(GlobalWindowHeight % GlobalBlockHeight == 0);
-	Assert(GlobalWindowWidth % GlobalBlockWidth == 0);
-	u32 YBlockCount = GlobalWindowHeight / GlobalBlockHeight;
-	u32 XBlockCount = GlobalWindowWidth / GlobalBlockWidth;
-	for(u32 YBlock = 0; YBlock < YBlockCount; ++YBlock)
+	Assert(GlobalWindowHeight % GlobalChunkHeight == 0);
+	Assert(GlobalWindowWidth % GlobalChunkWidth == 0);
+	u32 YChunkCount = GlobalWindowHeight / GlobalChunkHeight;
+	u32 XChunkCount = GlobalWindowWidth / GlobalChunkWidth;
+	for(u32 YChunk = 0; YChunk < YChunkCount; ++YChunk)
 	{
-		for(u32 XBlock = 0; XBlock < XBlockCount; ++XBlock)
+		for(u32 XChunk = 0; XChunk < XChunkCount; ++XChunk)
 		{
-			shoot_ray_block_data* ShootRayBlockData = GetShootRayBlockData(RenderState);
-			ShootRayBlockData->BlockStartX = GlobalBlockWidth * XBlock;
-			ShootRayBlockData->BlockStartY = GlobalBlockHeight * YBlock;
-			ShootRayBlockData->Backbuffer = Backbuffer;
-			ShootRayBlockData->RenderState = RenderState;
-			SDLAddEntry(&RenderState->Queue, ShootRayBlock, ShootRayBlockData);
+			shoot_ray_block_data* ShootRayChunkData = GetShootRayChunkData(RenderState);
+			ShootRayChunkData->ChunkStartX = GlobalChunkWidth * XChunk;
+			ShootRayChunkData->ChunkStartY = GlobalChunkHeight * YChunk;
+			ShootRayChunkData->BackbufferChunk = AllocateArray(v3, GlobalChunkWidth * GlobalWindowHeight);
+			ShootRayChunkData->RenderState = RenderState;
+			SDLAddEntry(&RenderState->Queue, ShootRayChunk, ShootRayChunkData);
 		}
 	}
 }
@@ -655,7 +655,7 @@ int main(int ArgumentCount, char** Arguments)
 	RenderState.TreeCount = 0;
 	RenderState.Trees[0] = LoadKDTreeFromFile("../data/teapot_with_normal.obj", &RenderState);
 
-	RenderState.ShootRayBlockCount = 0;
+	RenderState.ShootRayChunkCount = 0;
 
 	// NOTE(hugo): Multithreading init
 	RenderState.Queue = {};
@@ -704,14 +704,32 @@ int main(int ArgumentCount, char** Arguments)
 			printf("Rendering pass %i\n", CurrentAAIndex);
 			DEBUGRayCount = 0;
 			DEBUGCycleCountPass = SDL_GetPerformanceCounter();
-			RenderBackbuffer(&RenderState, Backbuffer);
+			RenderBackbuffer(&RenderState);
 
 			SDLCompleteAllWork(&RenderState.Queue);
-			for(u32 WorkIndex = 0; WorkIndex < RenderState.ShootRayBlockCount; ++WorkIndex)
+			for(u32 WorkIndex = 0; WorkIndex < RenderState.ShootRayChunkCount; ++WorkIndex)
 			{
-				DEBUGRayCount += RenderState.ShootRayBlockPool[WorkIndex].RayCount;
+				shoot_ray_block_data* WorkData = RenderState.ShootRayChunkPool + WorkIndex;
+
+				// NOTE(hugo): Gathering each chunk from every work and putting them into the Backbuffer
+				// {
+				for(u32 Y = 0; Y < GlobalChunkHeight; ++Y)
+				{
+					for(u32 X = 0; X < GlobalChunkWidth; ++X)
+					{
+						v3* BackbufferPixel = Backbuffer
+							+ WorkData->ChunkStartX + X
+							+ (WorkData->ChunkStartY + Y) * GlobalWindowWidth;
+						v3* WorkDataPixel = WorkData->BackbufferChunk + X + Y * GlobalChunkWidth;
+						*BackbufferPixel += *WorkDataPixel;
+					}
+				}
+				Free(WorkData->BackbufferChunk);
+				// }
+				DEBUGRayCount += WorkData->RayCount;
 			}
-			RenderState.ShootRayBlockCount = 0;
+			RenderState.ShootRayChunkCount = 0;
+
 
 			{
 				u64 CurrentCycleCountPass = SDL_GetPerformanceCounter();
