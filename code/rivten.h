@@ -107,15 +107,101 @@ void InitialiseArena(memory_arena* Arena, memory_index Size, void* Base)
 	Arena->Base = (u8 *)Base;
 }
 
-#define PushStruct(Arena, type) (type *)PushSize_(Arena, sizeof(type))
-#define PushArray(Arena, Count, type) (type *)PushSize_(Arena, (Count)*sizeof(type))
-#define PushSize(Arena, Size) PushSize_(Arena, Size)
-void* PushSize_(memory_arena* Arena, memory_index Size)
+inline memory_index
+GetAlignmentOffset(memory_arena *Arena, memory_index Alignment)
 {
+    memory_index AlignmentOffset = 0;
+    
+    memory_index ResultPointer = (memory_index)Arena->Base + Arena->Used;
+    memory_index AlignmentMask = Alignment - 1;
+    if(ResultPointer & AlignmentMask)
+    {
+        AlignmentOffset = Alignment - (ResultPointer & AlignmentMask);
+    }
+
+    return(AlignmentOffset);
+}
+
+enum arena_push_flag
+{
+    ArenaFlag_ClearToZero = 0x1,
+};
+struct arena_push_params
+{
+    u32 Flags;
+    u32 Alignment;
+};
+
+inline arena_push_params
+DefaultArenaParams(void)
+{
+    arena_push_params Params;
+    Params.Flags = ArenaFlag_ClearToZero;
+    Params.Alignment = 4;
+    return(Params);
+}
+
+inline arena_push_params
+AlignNoClear(u32 Alignment)
+{
+    arena_push_params Params = DefaultArenaParams();
+    Params.Flags &= ~ArenaFlag_ClearToZero;
+    Params.Alignment = Alignment;
+    return(Params);
+}
+
+inline arena_push_params
+Align(u32 Alignment, b32 Clear)
+{
+    arena_push_params Params = DefaultArenaParams();
+    if(Clear)
+    {
+        Params.Flags |= ArenaFlag_ClearToZero;
+    }
+    else
+    {
+        Params.Flags &= ~ArenaFlag_ClearToZero;
+    }
+    Params.Alignment = Alignment;
+    return(Params);
+}
+
+inline arena_push_params
+NoClear(void)
+{
+    arena_push_params Params = DefaultArenaParams();
+    Params.Flags &= ~ArenaFlag_ClearToZero;
+    return(Params);
+}
+
+#define PushStruct(Arena, type, ...) (type *)PushSize_(Arena, sizeof(type), ## __VA_ARGS__)
+#define PushArray(Arena, Count, type, ...) (type *)PushSize_(Arena, (Count)*sizeof(type), ## __VA_ARGS__)
+#define PushSize(Arena, Size, ...) PushSize_(Arena, Size, ## __VA_ARGS__)
+inline memory_index
+GetEffectiveSizeFor(memory_arena *Arena, memory_index SizeInit, arena_push_params Params = DefaultArenaParams())
+{
+    memory_index Size = SizeInit;
+        
+    memory_index AlignmentOffset = GetAlignmentOffset(Arena, Params.Alignment);
+    Size += AlignmentOffset;
+
+    return(Size);
+}
+
+void* PushSize_(memory_arena* Arena, memory_index SizeInit, arena_push_params Params = DefaultArenaParams())
+{
+	memory_index Size = GetEffectiveSizeFor(Arena, SizeInit, Params);
 	Assert(Arena->Used + Size <= Arena->Size);
-	void* Result = Arena->Base + Arena->Used;
+
+	memory_index AlignmentOffset = GetAlignmentOffset(Arena, Params.Alignment);
+	void* Result = Arena->Base + Arena->Used + AlignmentOffset;
 	Arena->Used += Size;
 
+    if(Params.Flags & ArenaFlag_ClearToZero)
+    {
+        ZeroSize(SizeInit, Result);
+    }
+    
 	return(Result);
 }
 

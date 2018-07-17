@@ -603,8 +603,7 @@ RenderBackbuffer(render_state* RenderState)
 			shoot_ray_block_data* ShootRayChunkData = GetShootRayChunkData(RenderState);
 			ShootRayChunkData->ChunkStartX = GlobalChunkWidth * XChunk;
 			ShootRayChunkData->ChunkStartY = GlobalChunkHeight * YChunk;
-			ShootRayChunkData->BackbufferChunk = PushArray(&RenderState->Arena, GlobalChunkWidth * GlobalChunkHeight, v3);
-			ZeroSize(sizeof(v3) * GlobalChunkWidth * GlobalChunkHeight, ShootRayChunkData->BackbufferChunk);
+			ShootRayChunkData->BackbufferChunk = PushArray(&RenderState->Arena, GlobalChunkWidth * GlobalChunkHeight, v3, Align(64, true));
 			ShootRayChunkData->RenderState = RenderState;
 			SDLAddEntry(&RenderState->Queue, ShootRayChunk, ShootRayChunkData);
 		}
