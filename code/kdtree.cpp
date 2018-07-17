@@ -296,11 +296,11 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 		u32 MaxTriangleCount = (u32)(Mesh.indices.size()) / 3;
 
 		Result->TriangleCount = 0;
-		Result->Triangles = AllocateArray(triangle, MaxTriangleCount);
+		Result->Triangles = PushArray(&RenderState->Arena, MaxTriangleCount, triangle);
 
 		u32 CurrentVertexPoolSize = 16;
 		RenderState->VertexCount = 0;
-		RenderState->Vertices = AllocateArray(vertex, CurrentVertexPoolSize);
+		RenderState->Vertices = PushArray(&RenderState->Arena, CurrentVertexPoolSize, vertex);
 
 		for(u32 TriangleIndex = 0; TriangleIndex < MaxTriangleCount; ++TriangleIndex)
 		{
@@ -327,8 +327,9 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 				{
 					if(RenderState->VertexCount == CurrentVertexPoolSize)
 					{
-						RenderState->Vertices = ReAllocateArray(RenderState->Vertices, vertex, 2 * CurrentVertexPoolSize);
-						CurrentVertexPoolSize *= 2;
+						// TODO(hugo): Not optimal ?
+						PushStruct(&RenderState->Arena, vertex);
+						++CurrentVertexPoolSize;
 					}
 
 					RenderState->Vertices[RenderState->VertexCount] = V;

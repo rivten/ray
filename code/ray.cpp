@@ -127,6 +127,8 @@ struct shoot_ray_block_data
 
 struct render_state
 {
+	memory_arena Arena;
+	temporary_memory TempMemory;
 	u32 SphereCount;
 	sphere Spheres[256];
 
@@ -601,7 +603,8 @@ RenderBackbuffer(render_state* RenderState)
 			shoot_ray_block_data* ShootRayChunkData = GetShootRayChunkData(RenderState);
 			ShootRayChunkData->ChunkStartX = GlobalChunkWidth * XChunk;
 			ShootRayChunkData->ChunkStartY = GlobalChunkHeight * YChunk;
-			ShootRayChunkData->BackbufferChunk = AllocateArray(v3, GlobalChunkWidth * GlobalWindowHeight);
+			ShootRayChunkData->BackbufferChunk = PushArray(&RenderState->Arena, GlobalChunkWidth * GlobalChunkHeight, v3);
+			ZeroSize(sizeof(v3) * GlobalChunkWidth * GlobalChunkHeight, ShootRayChunkData->BackbufferChunk);
 			ShootRayChunkData->RenderState = RenderState;
 			SDLAddEntry(&RenderState->Queue, ShootRayChunk, ShootRayChunkData);
 		}
@@ -630,12 +633,13 @@ int main(int ArgumentCount, char** Arguments)
 	SDL_Surface* Screen = SDL_GetWindowSurface(Window);
 	Assert(Screen);
 
-	v3* Backbuffer = AllocateArray(v3, GlobalWindowWidth * GlobalWindowHeight);
-#if RAY_COMPUTE_VARIATION
-	v3* PreviousScreen = AllocateArray(v3, GlobalWindowWidth * GlobalWindowHeight);
-#endif
-
 	render_state RenderState = {};
+
+	{
+		memory_index ArenaSize = Gigabytes(2);
+		void* ArenaBase = Allocate_(ArenaSize);
+		InitialiseArena(&RenderState.Arena, ArenaSize, ArenaBase);
+	}
 	//RenderState.Camera.P = V3(0.0f, 0.0f, 10.0f);
 	RenderState.Camera.P = V3(0.0f, 1.5f, 5.0f);
 	RenderState.Camera.XAxis = V3(1.0f, 0.0f, 0.0f);
@@ -651,11 +655,16 @@ int main(int ArgumentCount, char** Arguments)
 	RenderState.Entropy = RandomSeed(1234);
 
 	RenderState.TreeMaxPoolCount = 2 * 2048;
-	RenderState.Trees = AllocateArray(kdtree, RenderState.TreeMaxPoolCount);
+	RenderState.Trees = PushArray(&RenderState.Arena, RenderState.TreeMaxPoolCount, kdtree);
 	RenderState.TreeCount = 0;
 	RenderState.Trees[0] = LoadKDTreeFromFile("../data/teapot_with_normal.obj", &RenderState);
 
 	RenderState.ShootRayChunkCount = 0;
+
+	v3* Backbuffer = PushArray(&RenderState.Arena, GlobalWindowWidth * GlobalWindowHeight, v3);
+#if RAY_COMPUTE_VARIATION
+	v3* PreviousScreen = PushArray(&RenderState.Arena, GlobalWindowWidth * GlobalWindowHeight, v3);
+#endif
 
 	// NOTE(hugo): Multithreading init
 	RenderState.Queue = {};
@@ -704,6 +713,7 @@ int main(int ArgumentCount, char** Arguments)
 			printf("Rendering pass %i\n", CurrentAAIndex);
 			DEBUGRayCount = 0;
 			DEBUGCycleCountPass = SDL_GetPerformanceCounter();
+			RenderState.TempMemory = BeginTemporaryMemory(&RenderState.Arena);
 			RenderBackbuffer(&RenderState);
 
 			SDLCompleteAllWork(&RenderState.Queue);
@@ -724,12 +734,11 @@ int main(int ArgumentCount, char** Arguments)
 						*BackbufferPixel += *WorkDataPixel;
 					}
 				}
-				Free(WorkData->BackbufferChunk);
 				// }
 				DEBUGRayCount += WorkData->RayCount;
 			}
+			EndTemporaryMemory(RenderState.TempMemory);
 			RenderState.ShootRayChunkCount = 0;
-
 
 			{
 				u64 CurrentCycleCountPass = SDL_GetPerformanceCounter();
