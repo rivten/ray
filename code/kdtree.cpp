@@ -265,7 +265,11 @@ DEBUGOutputTreeGraphviz(kdtree* Root, render_state* RenderState)
 	FILE* OutputFile = fopen("kdtree.gv", "w");
 	Assert(OutputFile);
 	fprintf(OutputFile, "digraph G\n{\n");
+#ifdef _WIN32
+	fprintf(OutputFile, "\t/* sizeof(kdtree) = %zu */\n", sizeof(kdtree));
+#else
 	fprintf(OutputFile, "\t/* sizeof(kdtree) = %lu */\n", sizeof(kdtree));
+#endif
 	DEBUGOutputTreeGraphvizRec(OutputFile, Root, 0, RenderState);
 	fprintf(OutputFile, "}");
 	fclose(OutputFile);
