@@ -229,7 +229,6 @@ internal bool
 RayHitBoundingBox(ray Ray, rect3 BoundingBox)
 {
 	// TODO(hugo): Better perf for this !
-	bool Hit = false;
 
 	// NOTE(hugo): Checking BACK FACE of AABB
 	{
@@ -238,8 +237,12 @@ RayHitBoundingBox(ray Ray, rect3 BoundingBox)
 		{
 			float t = (BoundingBox.Min.z - Ray.Start.z) / Ray.Dir.z;
 			v3 HitPoint = Ray.Start + t * Ray.Dir;
-			Hit = Hit || (t >= 0.0f && HitPoint.x >= BoundingBox.Min.x && HitPoint.x < BoundingBox.Max.x &&
+			bool Hit = (t >= 0.0f && HitPoint.x >= BoundingBox.Min.x && HitPoint.x < BoundingBox.Max.x &&
 					HitPoint.y >= BoundingBox.Min.y && HitPoint.y < BoundingBox.Max.y);
+			if(Hit)
+			{
+				return(true);
+			}
 		}
 		else
 		{
@@ -254,8 +257,12 @@ RayHitBoundingBox(ray Ray, rect3 BoundingBox)
 		{
 			float t = (BoundingBox.Max.z - Ray.Start.z) / Ray.Dir.z;
 			v3 HitPoint = Ray.Start + t * Ray.Dir;
-			Hit = Hit || (t >= 0.0f && HitPoint.x >= BoundingBox.Min.x && HitPoint.x < BoundingBox.Max.x &&
+			bool Hit = (t >= 0.0f && HitPoint.x >= BoundingBox.Min.x && HitPoint.x < BoundingBox.Max.x &&
 					HitPoint.y >= BoundingBox.Min.y && HitPoint.y < BoundingBox.Max.y);
+			if(Hit)
+			{
+				return(true);
+			}
 		}
 		else
 		{
@@ -270,8 +277,12 @@ RayHitBoundingBox(ray Ray, rect3 BoundingBox)
 		{
 			float t = (BoundingBox.Min.x - Ray.Start.x) / Ray.Dir.x;
 			v3 HitPoint = Ray.Start + t * Ray.Dir;
-			Hit = Hit || (t >= 0.0f && HitPoint.y >= BoundingBox.Min.y && HitPoint.y < BoundingBox.Max.y &&
+			bool Hit = (t >= 0.0f && HitPoint.y >= BoundingBox.Min.y && HitPoint.y < BoundingBox.Max.y &&
 					HitPoint.z >= BoundingBox.Min.z && HitPoint.z < BoundingBox.Max.z);
+			if(Hit)
+			{
+				return(true);
+			}
 		}
 		else
 		{
@@ -286,8 +297,12 @@ RayHitBoundingBox(ray Ray, rect3 BoundingBox)
 		{
 			float t = (BoundingBox.Max.x - Ray.Start.x) / Ray.Dir.x;
 			v3 HitPoint = Ray.Start + t * Ray.Dir;
-			Hit = Hit || (t >= 0.0f && HitPoint.y >= BoundingBox.Min.y && HitPoint.y < BoundingBox.Max.y &&
+			bool Hit = (t >= 0.0f && HitPoint.y >= BoundingBox.Min.y && HitPoint.y < BoundingBox.Max.y &&
 					HitPoint.z >= BoundingBox.Min.z && HitPoint.z < BoundingBox.Max.z);
+			if(Hit)
+			{
+				return(true);
+			}
 		}
 		else
 		{
@@ -302,8 +317,12 @@ RayHitBoundingBox(ray Ray, rect3 BoundingBox)
 		{
 			float t = (BoundingBox.Min.y - Ray.Start.y) / Ray.Dir.y;
 			v3 HitPoint = Ray.Start + t * Ray.Dir;
-			Hit = Hit || (t >= 0.0f && HitPoint.x >= BoundingBox.Min.x && HitPoint.x < BoundingBox.Max.x &&
+			bool Hit = (t >= 0.0f && HitPoint.x >= BoundingBox.Min.x && HitPoint.x < BoundingBox.Max.x &&
 					HitPoint.z >= BoundingBox.Min.z && HitPoint.z < BoundingBox.Max.z);
+			if(Hit)
+			{
+				return(true);
+			}
 		}
 		else
 		{
@@ -318,8 +337,12 @@ RayHitBoundingBox(ray Ray, rect3 BoundingBox)
 		{
 			float t = (BoundingBox.Max.y - Ray.Start.y) / Ray.Dir.y;
 			v3 HitPoint = Ray.Start + t * Ray.Dir;
-			Hit = Hit || (t >= 0.0f && HitPoint.x >= BoundingBox.Min.x && HitPoint.x < BoundingBox.Max.x &&
+			bool Hit = (t >= 0.0f && HitPoint.x >= BoundingBox.Min.x && HitPoint.x < BoundingBox.Max.x &&
 					HitPoint.z >= BoundingBox.Min.z && HitPoint.z < BoundingBox.Max.z);
+			if(Hit)
+			{
+				return(true);
+			}
 		}
 		else
 		{
@@ -327,7 +350,7 @@ RayHitBoundingBox(ray Ray, rect3 BoundingBox)
 		}
 	}
 
-	return(Hit);
+	return(false);
 }
 
 internal void
@@ -619,6 +642,7 @@ int main(int ArgumentCount, char** Arguments)
 	u32 SDLInitParams = SDL_INIT_EVERYTHING;
 	SDL_CHECK(SDL_Init(SDLInitParams));
 
+	printf("Cache line size = %dB\n", SDL_GetCPUCacheLineSize());
 
 	u32 WindowFlags = SDL_WINDOW_SHOWN;
 	SDL_Window* Window = SDL_CreateWindow("PathTracer", 
