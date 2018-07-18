@@ -206,6 +206,7 @@ ComputeBoundingBox(kdtree* Tree, render_state* RenderState)
 
 internal kdtree* GetKDTreeFromPool(u32 Index, render_state* RenderState);
 internal u32 CreateKDTree(render_state* RenderState);
+internal kdtree* CreateKDTreeRoot(render_state* RenderState);
 
 internal void
 BuildKdTree(kdtree* Tree, u32 CurrentDepth, render_state* RenderState)
@@ -277,7 +278,7 @@ DEBUGOutputTreeGraphviz(kdtree* Root, render_state* RenderState)
 
 }
 
-internal kdtree
+internal void
 LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 {
 	tinyobj::attrib_t Attributes = {};
@@ -287,8 +288,10 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 			0, Filename, 0, true);
 	Assert(LoadObjResult);
 
-	u32 ResultIndex = CreateKDTree(RenderState);
-	kdtree* Result = GetKDTreeFromPool(ResultIndex, RenderState);
+	// NOTE(hugo): Temporary "on the stack" root,
+	// the real arena allocation of the root will
+	// come after in this function.
+	kdtree TreeRoot = {};
 
 	for(u32 ShapeIndex = 0; ShapeIndex < Shapes.size(); ++ShapeIndex)
 	{
@@ -296,8 +299,8 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 
 		u32 MaxTriangleCount = (u32)(Mesh.indices.size()) / 3;
 
-		Result->TriangleCount = 0;
-		Result->Triangles = PushArray(&RenderState->Arena, MaxTriangleCount, triangle);
+		TreeRoot.TriangleCount = 0;
+		TreeRoot.Triangles = PushArray(&RenderState->Arena, MaxTriangleCount, triangle);
 
 		u32 CurrentVertexPoolSize = 16;
 		RenderState->VertexCount = 0;
@@ -305,8 +308,8 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 
 		for(u32 TriangleIndex = 0; TriangleIndex < MaxTriangleCount; ++TriangleIndex)
 		{
-			++Result->TriangleCount;
-			triangle* Triangle = Result->Triangles + TriangleIndex;
+			++TreeRoot.TriangleCount;
+			triangle* Triangle = TreeRoot.Triangles + TriangleIndex;
 			for(u32 VIndex = 0; VIndex < 3; ++VIndex)
 			{
 				tinyobj::index_t AttributeIndex = Mesh.indices[3 * TriangleIndex + VIndex];
@@ -343,45 +346,51 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 	}
 
 	// NOTE(hugo): Compute bounding box
-	Result->BoundingBox = {V3(MAX_REAL, MAX_REAL, MAX_REAL),
+	TreeRoot.BoundingBox = {V3(MAX_REAL, MAX_REAL, MAX_REAL),
 		V3(MIN_REAL, MIN_REAL, MIN_REAL)};
 	for(u32 VertexIndex = 0; VertexIndex < RenderState->VertexCount; ++VertexIndex)
 	{
 		v3 P = RenderState->Vertices[VertexIndex].P;
-		if(P.x > Result->BoundingBox.Max.x)
+		if(P.x > TreeRoot.BoundingBox.Max.x)
 		{
-			Result->BoundingBox.Max.x = P.x;
+			TreeRoot.BoundingBox.Max.x = P.x;
 		}
-		if(P.y > Result->BoundingBox.Max.y)
+		if(P.y > TreeRoot.BoundingBox.Max.y)
 		{
-			Result->BoundingBox.Max.y = P.y;
+			TreeRoot.BoundingBox.Max.y = P.y;
 		}
-		if(P.z > Result->BoundingBox.Max.z)
+		if(P.z > TreeRoot.BoundingBox.Max.z)
 		{
-			Result->BoundingBox.Max.z = P.z;
+			TreeRoot.BoundingBox.Max.z = P.z;
 		}
-		if(P.x < Result->BoundingBox.Min.x)
+		if(P.x < TreeRoot.BoundingBox.Min.x)
 		{
-			Result->BoundingBox.Min.x = P.x;
+			TreeRoot.BoundingBox.Min.x = P.x;
 		}
-		if(P.y < Result->BoundingBox.Min.y)
+		if(P.y < TreeRoot.BoundingBox.Min.y)
 		{
-			Result->BoundingBox.Min.y = P.y;
+			TreeRoot.BoundingBox.Min.y = P.y;
 		}
-		if(P.z < Result->BoundingBox.Min.z)
+		if(P.z < TreeRoot.BoundingBox.Min.z)
 		{
-			Result->BoundingBox.Min.z = P.z;
+			TreeRoot.BoundingBox.Min.z = P.z;
 		}
 	}
 
+	// NOTE(hugo): We allocate the root in the arena
+	// at the very end so that every tree allocation
+	// in the arena are contiguous.
+	kdtree* Root = CreateKDTreeRoot(RenderState);
+	Root->TriangleCount = TreeRoot.TriangleCount;
+	Root->Triangles = TreeRoot.Triangles;
+	Root->BoundingBox = TreeRoot.BoundingBox;
+
 	printf("Building the KD Tree...\n");
-	BuildKdTree(Result, 0, RenderState);
+	BuildKdTree(Root, 0, RenderState);
 	printf("KD Tree built !\n");
 
 #if 1
-	DEBUGOutputTreeGraphviz(Result, RenderState);
+	DEBUGOutputTreeGraphviz(Root, RenderState);
 #endif
-
-	return(*Result);
 };
 

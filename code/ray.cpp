@@ -134,7 +134,6 @@ struct render_state
 
 	kdtree* Trees;
 	u32 TreeCount;
-	u32 TreeMaxPoolCount;
 
 	u32 VertexCount;
 	vertex* Vertices;
@@ -348,13 +347,24 @@ GetShootRayChunkData(render_state* RenderState)
 }
 
 #define KD_TREE_NO_CHILD 0xFFFFFFFF
+internal kdtree*
+CreateKDTreeRoot(render_state* RenderState)
+{
+	RenderState->Trees = PushStruct(&RenderState->Arena, kdtree);
+	RenderState->Trees[0].LeftIndex = KD_TREE_NO_CHILD;
+	RenderState->Trees[0].RightIndex = KD_TREE_NO_CHILD;
+
+	++RenderState->TreeCount;
+
+	return(RenderState->Trees);
+}
+
 internal u32
 CreateKDTree(render_state* RenderState)
 {
-	Assert(RenderState->TreeCount < RenderState->TreeMaxPoolCount);
 	u32 Result = RenderState->TreeCount;
 
-	kdtree* Tree = RenderState->Trees + RenderState->TreeCount;
+	kdtree* Tree = PushStruct(&RenderState->Arena, kdtree);
 	Tree->LeftIndex = KD_TREE_NO_CHILD;
 	Tree->RightIndex = KD_TREE_NO_CHILD;
 
@@ -438,10 +448,9 @@ int main(int ArgumentCount, char** Arguments)
 
 	RenderState.Entropy = RandomSeed(1234);
 
-	RenderState.TreeMaxPoolCount = 2 * 2048;
-	RenderState.Trees = PushArray(&RenderState.Arena, RenderState.TreeMaxPoolCount, kdtree);
+	//RenderState.Trees = PushArray(&RenderState.Arena, RenderState.TreeMaxPoolCount, kdtree);
 	RenderState.TreeCount = 0;
-	RenderState.Trees[0] = LoadKDTreeFromFile("../data/teapot_with_normal.obj", &RenderState);
+	LoadKDTreeFromFile("../data/teapot_with_normal.obj", &RenderState);
 
 	RenderState.ShootRayChunkCount = 0;
 
