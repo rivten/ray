@@ -236,6 +236,7 @@ BuildKdTree(kdtree* Tree, u32 CurrentDepth, render_state* RenderState)
 	// NOTE(hugo): Let's say that this node
 	// does not contain any triangles.
 	Tree->TriangleCount = 0;
+	Tree->Triangles = 0;
 }
 
 internal void
@@ -383,29 +384,4 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 
 	return(*Result);
 };
-
-internal void
-RayKdTreeIntersection(ray Ray, kdtree* Node, render_state* RenderState, hit_record* ClosestHitRecord)
-{
-	rect3 NodeBoundingBox = Node->BoundingBox;
-	if(RayHitBoundingBox(Ray, NodeBoundingBox))
-	{
-		kdtree* Left = GetKDTreeFromPool(Node->LeftIndex, RenderState);
-		if(Left)
-		{
-			RayKdTreeIntersection(Ray, Left, RenderState, ClosestHitRecord);
-		}
-		kdtree* Right = GetKDTreeFromPool(Node->RightIndex, RenderState);
-		if(Right)
-		{
-			RayKdTreeIntersection(Ray, Right, RenderState, ClosestHitRecord);
-		}
-
-		for(u32 TriangleIndex = 0; TriangleIndex < Node->TriangleCount; ++TriangleIndex)
-		{
-			triangle T = Node->Triangles[TriangleIndex];
-			RayTriangleIntersection(Ray, T, RenderState->Vertices, ClosestHitRecord);
-		}
-	}
-}
 

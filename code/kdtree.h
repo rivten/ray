@@ -10,15 +10,6 @@ struct vertex
 struct triangle
 {
 	u32 Indices[3];
-	//u32 MaterialIndex;
-};
-
-struct mesh
-{
-	u32 VertexCount;
-	vertex* Vertices;
-	u32 TriangleCount;
-	triangle* Triangles;
 };
 
 struct kdtree
