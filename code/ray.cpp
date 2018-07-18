@@ -266,7 +266,7 @@ ShootRay(render_state* RenderState, ray Ray, ray_context* Context)
 		// NOTE(hugo): Russian Roulette Path Termination
 		// {
 		Context->Throughput = Hadamard(Context->Throughput, RayColor);
-		float RussianRouletteP = Maxf(Context->Throughput.x, Maxf(Context->Throughput.y, Context->Throughput.y));
+		float RussianRouletteP = Maxf(Context->Throughput.x, Maxf(Context->Throughput.y, Context->Throughput.z));
 		if(Context->Depth > 0)
 		{
 			if(RandomUnilateral() > RussianRouletteP)
