@@ -16,6 +16,18 @@
 #define SDL_CHECK(Op) {s32 Result = (Op); Assert(Result == 0);}
 #define MAX_FLOAT32 FLT_MAX
 
+/*
+   TODO(hugo):
+   * Monte Carlo importance sampling
+   * better material handling
+   * SIMD for intersection evaluation
+   * SAH KdTree
+   * Mesh data memory layout
+   * BRDF / refraction / dielectric
+   * Light / emmisive materials
+   * Perf improvements on mesh / material loading
+*/
+
 #if 0
 global_variable u32 GlobalWindowWidth = 1024;
 global_variable u32 GlobalWindowHeight = 1024;
