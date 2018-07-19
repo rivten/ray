@@ -11,7 +11,7 @@
 #include "random.h"
 #include "kdtree.h"
 
-#define USE_ENTROPY 0
+#define USE_ENTROPY 1
 #define RAY_COMPUTE_VARIATION 1
 
 #if !USE_ENTROPY
@@ -123,6 +123,8 @@ struct shoot_ray_block_data
 	u32 ChunkStartX;
 	u32 ChunkStartY;
 	u32 RayCount;
+	u64 SeedAlpha;
+	u64 SeedBeta;
 };
 
 struct render_state
@@ -232,6 +234,7 @@ struct ray_context
 	u32 Depth;
 	u32 RayShot;
 	v3 Throughput;
+	random_series* Entropy;
 };
 
 // TODO(hugo): Maybe unroll this recursive call ?
@@ -269,7 +272,7 @@ ShootRay(render_state* RenderState, ray Ray, ray_context* Context)
 		float RussianRouletteP = Maxf(Context->Throughput.x, Maxf(Context->Throughput.y, Context->Throughput.z));
 		if(Context->Depth > 0)
 		{
-			if(RandomUnilateral() > RussianRouletteP)
+			if(RandomUnilateral(Context->Entropy) > RussianRouletteP)
 			{
 				return(RayColor);
 			}
@@ -298,6 +301,8 @@ PLATFORM_WORK_QUEUE_CALLBACK(ShootRayChunk)
 	float ScreenWidth = RenderState->PersistentRenderValue.ScreenWidth;
 	float ScreenHeight = RenderState->PersistentRenderValue.ScreenHeight;
 	v3 CameraYAxis = RenderState->PersistentRenderValue.CameraYAxis;
+
+	random_series ThreadRandomSeries = RandomSeed(ShootRayChunkData->SeedAlpha, ShootRayChunkData->SeedBeta);
 
 	u32 StartX = ShootRayChunkData->ChunkStartX;
 	u32 EndX = StartX + GlobalChunkWidth;
@@ -329,6 +334,7 @@ PLATFORM_WORK_QUEUE_CALLBACK(ShootRayChunk)
 			ray_context Context = {};
 			Context.Throughput = V3(1.0f, 1.0f, 1.0f);
 			Context.RayShot = 0;
+			Context.Entropy = &ThreadRandomSeries;
 			*Color += ShootRay(RenderState, Ray, &Context);
 
 			ShootRayChunkData->RayCount += Context.RayShot;
@@ -399,6 +405,8 @@ RenderBackbuffer(render_state* RenderState)
 			ShootRayChunkData->ChunkStartY = GlobalChunkHeight * YChunk;
 			ShootRayChunkData->BackbufferChunk = PushArray(&RenderState->Arena, GlobalChunkWidth * GlobalChunkHeight, v3, Align(64, true));
 			ShootRayChunkData->RenderState = RenderState;
+			ShootRayChunkData->SeedAlpha = RandomNextU64(&RenderState->Entropy);
+			ShootRayChunkData->SeedBeta = RandomNextU64(&RenderState->Entropy);
 			SDLAddEntry(&RenderState->Queue, ShootRayChunk, ShootRayChunkData);
 		}
 	}
@@ -446,7 +454,7 @@ int main(int ArgumentCount, char** Arguments)
 	RenderState.PersistentRenderValue.ScreenHeight = RenderState.PersistentRenderValue.ScreenWidth * RenderState.AspectRatio;
 	RenderState.PersistentRenderValue.CameraYAxis = Cross(RenderState.Camera.ZAxis, RenderState.Camera.XAxis);
 
-	RenderState.Entropy = RandomSeed(1234);
+	RenderState.Entropy = RandomSeed(1234, 1235);
 
 	//RenderState.Trees = PushArray(&RenderState.Arena, RenderState.TreeMaxPoolCount, kdtree);
 	RenderState.TreeCount = 0;
