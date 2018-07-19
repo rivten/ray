@@ -11,19 +11,7 @@
 #include "random.h"
 #include "kdtree.h"
 
-#define USE_ENTROPY 1
 #define RAY_COMPUTE_VARIATION 1
-
-#if !USE_ENTROPY
-#include <time.h>
-#include <stdlib.h>
-internal float
-RandomUnilateral(void)
-{
-	float Result = (float)(rand()) / (float)(RAND_MAX);
-	return(Result);
-}
-#endif
 
 #define SDL_CHECK(Op) {s32 Result = (Op); Assert(Result == 0);}
 #define MAX_FLOAT32 FLT_MAX
@@ -212,15 +200,9 @@ GetRandomPointInUnitSphere(random_series* Entropy)
 	v3 Result = {};
 	do
 	{
-#if USE_ENTROPY
 		float x = RandomUnilateral(Entropy);
 		float y = RandomUnilateral(Entropy);
 		float z = RandomUnilateral(Entropy);
-#else
-		float x = RandomUnilateral();
-		float y = RandomUnilateral();
-		float z = RandomUnilateral();
-#endif
 		Result = 2.0f * V3(x, y, z) - V3(1.0f, 1.0f, 1.0f);
 	} while(LengthSqr(Result) >= 1.0f);
 	return(Result);
@@ -316,13 +298,8 @@ PLATFORM_WORK_QUEUE_CALLBACK(ShootRayChunk)
 
 			ray Ray = {};
 			Ray.Start = RenderState->Camera.P;
-#if USE_ENTROPY
 			float XOffset = RandomUnilateral(&RenderState->Entropy);
 			float YOffset = RandomUnilateral(&RenderState->Entropy);
-#else
-			float XOffset = RandomUnilateral();
-			float YOffset = RandomUnilateral();
-#endif
 			Assert(XOffset >= 0.0f && XOffset <= 1.0f);
 			Assert(YOffset >= 0.0f && YOffset <= 1.0f);
 			v2 PixelRelativeCoordInScreen = V2(((float(X) + XOffset) / float(GlobalWindowWidth)) - 0.5f, 0.5f - ((float(Y) + YOffset) / float(GlobalWindowHeight)));
@@ -414,10 +391,6 @@ RenderBackbuffer(render_state* RenderState)
 
 int main(int ArgumentCount, char** Arguments)
 {
-#if !USE_ENTROPY
-	srand(time(NULL));
-#endif
-
 	u32 SDLInitParams = SDL_INIT_EVERYTHING;
 	SDL_CHECK(SDL_Init(SDLInitParams));
 
