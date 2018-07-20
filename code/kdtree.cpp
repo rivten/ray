@@ -293,23 +293,31 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 	// come after in this function.
 	kdtree TreeRoot = {};
 
+	// NOTE(hugo): First pass to get the triangle count
+	u32 TriangleCount = 0;
+	for(u32 ShapeIndex = 0; ShapeIndex < Shapes.size(); ++ShapeIndex)
+	{
+		tinyobj::mesh_t Mesh = Shapes[ShapeIndex].mesh;
+		TriangleCount += (u32)(Mesh.indices.size()) / 3;
+
+	}
+
+	TreeRoot.TriangleCount = 0;
+	TreeRoot.Triangles = PushArray(&RenderState->Arena, TriangleCount, triangle);
+
+	u32 CurrentVertexPoolSize = 16;
+	RenderState->VertexCount = 0;
+	RenderState->Vertices = PushArray(&RenderState->Arena, CurrentVertexPoolSize, vertex);
+
 	for(u32 ShapeIndex = 0; ShapeIndex < Shapes.size(); ++ShapeIndex)
 	{
 		tinyobj::mesh_t Mesh = Shapes[ShapeIndex].mesh;
 
-		u32 MaxTriangleCount = (u32)(Mesh.indices.size()) / 3;
-
-		TreeRoot.TriangleCount = 0;
-		TreeRoot.Triangles = PushArray(&RenderState->Arena, MaxTriangleCount, triangle);
-
-		u32 CurrentVertexPoolSize = 16;
-		RenderState->VertexCount = 0;
-		RenderState->Vertices = PushArray(&RenderState->Arena, CurrentVertexPoolSize, vertex);
-
-		for(u32 TriangleIndex = 0; TriangleIndex < MaxTriangleCount; ++TriangleIndex)
+		u32 MeshTriangleCount = (u32)(Mesh.indices.size()) / 3;
+		for(u32 TriangleIndex = 0; TriangleIndex < MeshTriangleCount; ++TriangleIndex)
 		{
+			triangle* Triangle = TreeRoot.Triangles + TreeRoot.TriangleCount;
 			++TreeRoot.TriangleCount;
-			triangle* Triangle = TreeRoot.Triangles + TriangleIndex;
 			for(u32 VIndex = 0; VIndex < 3; ++VIndex)
 			{
 				tinyobj::index_t AttributeIndex = Mesh.indices[3 * TriangleIndex + VIndex];

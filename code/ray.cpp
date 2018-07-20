@@ -28,7 +28,7 @@
    * Perf improvements on mesh / material loading
 */
 
-#if 0
+#if 1
 global_variable u32 GlobalWindowWidth = 1024;
 global_variable u32 GlobalWindowHeight = 1024;
 #else
@@ -428,7 +428,8 @@ int main(int ArgumentCount, char** Arguments)
 		InitialiseArena(&RenderState.Arena, ArenaSize, ArenaBase);
 	}
 	//RenderState.Camera.P = V3(0.0f, 0.0f, 10.0f);
-	RenderState.Camera.P = V3(0.0f, 1.5f, 5.0f);
+	//RenderState.Camera.P = V3(0.0f, 1.5f, 5.0f);
+	RenderState.Camera.P = V3(0.0f, 1.0f, 2.5f);
 	RenderState.Camera.XAxis = V3(1.0f, 0.0f, 0.0f);
 	RenderState.Camera.ZAxis = V3(0.0f, 0.0f, 1.0f);
 	RenderState.FoV = Radians(75.0f);
@@ -443,7 +444,8 @@ int main(int ArgumentCount, char** Arguments)
 
 	//RenderState.Trees = PushArray(&RenderState.Arena, RenderState.TreeMaxPoolCount, kdtree);
 	RenderState.TreeCount = 0;
-	LoadKDTreeFromFile("../data/teapot_with_normal.obj", &RenderState);
+	//LoadKDTreeFromFile("../data/teapot_with_normal.obj", &RenderState);
+	LoadKDTreeFromFile("../data/CornellBox/CornellBox-Original-WithNormals.obj", &RenderState);
 
 	RenderState.ShootRayChunkCount = 0;
 
