@@ -182,7 +182,7 @@ RayTriangleIntersection(ray Ray, triangle T, vertex* Vertices, hit_record* Close
 		ClosestHitRecord->N = N;
 
 		// TODO(hugo): Implement material
-		ClosestHitRecord->MaterialIndex = 0;
+		ClosestHitRecord->MaterialIndex = T.MatIndex;
 	}
 }
 

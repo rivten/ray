@@ -10,6 +10,7 @@ struct vertex
 struct triangle
 {
 	u32 Indices[3];
+	u32 MatIndex;
 };
 
 struct kdtree

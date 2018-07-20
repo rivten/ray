@@ -26,9 +26,12 @@
    * BRDF / refraction / dielectric
    * Light / emmisive materials
    * Perf improvements on mesh / material loading
+   
+	CRASH:
+	> Weird crash when setting the maximum amount of triangle in a leaf
 */
 
-#if 1
+#if 0
 global_variable u32 GlobalWindowWidth = 1024;
 global_variable u32 GlobalWindowHeight = 1024;
 #else
@@ -99,12 +102,7 @@ struct sphere
 	u32 MaterialIndex;
 };
 
-struct material
-{
-	v3 Albedo;
-	float Attenuation;
-	float Scatter; // NOTE(hugo): 0 : No scatter (full specular), 1 : full diffuse
-};
+#include "material.cpp"
 
 struct persistent_render_value
 {
@@ -445,7 +443,8 @@ int main(int ArgumentCount, char** Arguments)
 	//RenderState.Trees = PushArray(&RenderState.Arena, RenderState.TreeMaxPoolCount, kdtree);
 	RenderState.TreeCount = 0;
 	//LoadKDTreeFromFile("../data/teapot_with_normal.obj", &RenderState);
-	LoadKDTreeFromFile("../data/CornellBox/CornellBox-Original-WithNormals.obj", &RenderState);
+#define DATA_FOLDER(Filename) "../data/"Filename
+	LoadKDTreeFromFile(DATA_FOLDER("CornellBox/CornellBox-Original-WithNormals.obj"), DATA_FOLDER("CornellBox"), &RenderState);
 
 	RenderState.ShootRayChunkCount = 0;
 
@@ -459,11 +458,13 @@ int main(int ArgumentCount, char** Arguments)
 	sdl_thread_startup Startups[4] = {};
 	SDLMakeQueue(&RenderState.Queue, ArrayCount(Startups), Startups);
 
+#if 0
 	PushMaterial(&RenderState, {V3(0.8f, 0.2f, 0.1f), 0.5f, 0.9f});
 	PushMaterial(&RenderState, {V3(0.2f, 1.0f, 0.5f), 0.5f, 0.5f});
 	PushMaterial(&RenderState, {V3(0.0f, 0.7f, 1.0f), 0.8f, 0.1f});
 	PushMaterial(&RenderState, {V3(0.0f, 0.7f, 1.0f), 0.4f, 0.8f});
 	PushMaterial(&RenderState, {V3(0.8f, 0.6f, 0.2f), 0.6f, 0.7f});
+#endif
 
 #if 0
 	PushSphere(&RenderState, {1.0f, V3(-1.0f, 0.5f, 5.0f), 0});

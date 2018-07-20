@@ -279,14 +279,24 @@ DEBUGOutputTreeGraphviz(kdtree* Root, render_state* RenderState)
 }
 
 internal void
-LoadKDTreeFromFile(char* Filename, render_state* RenderState)
+LoadKDTreeFromFile(char* Filename, char* MTLDir, render_state* RenderState)
 {
 	tinyobj::attrib_t Attributes = {};
 	std::vector<tinyobj::shape_t> Shapes = {};
 	std::vector<tinyobj::material_t> Materials = {};
 	bool LoadObjResult = LoadObj(&Attributes, &Shapes, &Materials,
-			0, Filename, 0, true);
+			0, Filename, MTLDir, true);
 	Assert(LoadObjResult);
+
+	for(u32 MatIndex = 0; MatIndex < Materials.size(); ++MatIndex)
+	{
+		tinyobj::material_t MtlMat = Materials[MatIndex];
+		material Mat = {};
+		Mat.Albedo = V3(MtlMat.diffuse[0], MtlMat.diffuse[1], MtlMat.diffuse[2]);
+		Mat.Attenuation = 0.5f;
+		Mat.Scatter = 0.9f;
+		PushMaterial(RenderState, Mat);
+	}
 
 	// NOTE(hugo): Temporary "on the stack" root,
 	// the real arena allocation of the root will
@@ -317,6 +327,8 @@ LoadKDTreeFromFile(char* Filename, render_state* RenderState)
 		for(u32 TriangleIndex = 0; TriangleIndex < MeshTriangleCount; ++TriangleIndex)
 		{
 			triangle* Triangle = TreeRoot.Triangles + TreeRoot.TriangleCount;
+			Assert(TriangleIndex < Mesh.material_ids.size());
+			Triangle->MatIndex = Mesh.material_ids[TriangleIndex];
 			++TreeRoot.TriangleCount;
 			for(u32 VIndex = 0; VIndex < 3; ++VIndex)
 			{
