@@ -254,6 +254,11 @@ ShootRay(render_state* RenderState, ray Ray, ray_context* Context)
 		v3 TargetSpecular = Reflect(Ray.Dir, ClosestHitRecord.N);
 		material* M = RenderState->Materials + ClosestHitRecord.MaterialIndex;
 
+		if(M->IsLight)
+		{
+			return(M->Emissivity);
+		}
+
 		NextRay.Dir = Normalized(Lerp(TargetSpecular, M->Scatter, TargetDiffuse));
 
 		v3 RayColor = M->Attenuation * M->Albedo;
@@ -278,9 +283,13 @@ ShootRay(render_state* RenderState, ray Ray, ray_context* Context)
 	}
 	else
 	{
+#if 1
 		// NOTE(hugo): No hit : Background color
 		float t = 0.5f * (1.0f + Ray.Dir.y);
 		return(Lerp(V3(1.0f, 1.0f, 1.0f), t, V3(0.5f, 0.7f, 1.0f)));
+#else
+		return(V3(0.0f, 0.0f, 0.0f));
+#endif
 
 	}
 }
@@ -443,7 +452,7 @@ int main(int ArgumentCount, char** Arguments)
 	//RenderState.Trees = PushArray(&RenderState.Arena, RenderState.TreeMaxPoolCount, kdtree);
 	RenderState.TreeCount = 0;
 	//LoadKDTreeFromFile("../data/teapot_with_normal.obj", &RenderState);
-#define DATA_FOLDER(Filename) "../data/"Filename
+#define DATA_FOLDER(Filename) "../data/" Filename
 	LoadKDTreeFromFile(DATA_FOLDER("CornellBox/CornellBox-Original-WithNormals.obj"), DATA_FOLDER("CornellBox"), &RenderState);
 
 	RenderState.ShootRayChunkCount = 0;

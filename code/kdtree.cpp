@@ -278,6 +278,12 @@ DEBUGOutputTreeGraphviz(kdtree* Root, render_state* RenderState)
 
 }
 
+inline bool
+IsZero(v3 V)
+{
+	return(V.x == 0.0f && V.y == 0.0f && V.z == 0.0f);
+}
+
 internal void
 LoadKDTreeFromFile(char* Filename, char* MTLDir, render_state* RenderState)
 {
@@ -293,8 +299,14 @@ LoadKDTreeFromFile(char* Filename, char* MTLDir, render_state* RenderState)
 		tinyobj::material_t MtlMat = Materials[MatIndex];
 		material Mat = {};
 		Mat.Albedo = V3(MtlMat.diffuse[0], MtlMat.diffuse[1], MtlMat.diffuse[2]);
-		Mat.Attenuation = 0.5f;
-		Mat.Scatter = 0.9f;
+		Mat.Attenuation = 0.8f;
+		Mat.Scatter = 1.0f;
+		v3 Emissivity = V3(MtlMat.emission[0], MtlMat.emission[1], MtlMat.emission[2]);
+		Mat.IsLight = !IsZero(Emissivity);
+		if(Mat.IsLight)
+		{
+			Mat.Emissivity = Emissivity;
+		}
 		PushMaterial(RenderState, Mat);
 	}
 
